@@ -21,7 +21,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import EXPENSE_BASES, ExpenseItem, derive_expense_components, CoverageRate
-from conftest import PATTERNS
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 def test_empty_rows_emit_zero_primitives():
     """Empty rows: every primitive is zero across the projection horizon."""
@@ -395,3 +395,67 @@ def test_face_routes_fast_to_full():
     m_full = fcf.gmm.measure(mp, with_face, full=True)
     m_fast = fcf.gmm.measure(mp, with_face, full=False)
     assert np.isclose(m_full.bel_path[0, 0], m_fast.bel[0])
+
+
+def _death_basis(**overrides):
+    """1%/month mortality, 2%/month lapse, zero discount, RA off."""
+    kw = dict(
+        mortality_q     = 0.01,
+        lapse_q         = 0.02,
+        discount_annual = 0.0,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.0,
+    )
+    kw.update(overrides)
+    return make_death_basis(**kw)
+
+
+def test_acquisition_and_maintenance_expense_hand_calc():
+    """Acquisition (t=0) and maintenance expense, hand-checked through measure()."""
+    res = fcf.gmm.measure(
+        fcf.ModelPoints.single(
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
+            premium=12_000.0, term_months=2,
+            calculation_methods=PATTERNS,
+        ),
+        _death_basis(
+            expense_items=(
+                ExpenseItem("acquisition", "per_policy",    500.0),
+                ExpenseItem("maintenance", "per_policy", 120.0),  # 10 per month
+            ),
+        ),
+    )
+    inforce = [1.0, 0.99 * 0.98]
+    # expense_cf[0] = acquisition + maintenance = 1*500 + 1*(120/12) = 510
+    # expense_cf[1] = maintenance only         = 0.9702*(120/12)     = 9.702
+    assert np.isclose(res.cashflows.expense_cf[0, 0], 510.0)
+    assert np.isclose(res.cashflows.expense_cf[0, 1], 9.702)
+
+    # BEL = PV(claims) + PV(expenses) - PV(premiums)
+    pv_claims = 19702.0
+    pv_expenses = 510.0 + 9.702
+    pv_premiums = 12_000.0 + inforce[1] * 12_000.0
+    assert np.isclose(res.bel_path[0, 0], pv_claims + pv_expenses - pv_premiums)
+
+
+def test_maintenance_expense_grows_with_inflation():
+    """Maintenance expense grows with inflation; acquisition does not recur."""
+    res = fcf.gmm.measure(
+        fcf.ModelPoints.single(
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
+            premium=12_000.0, term_months=13,
+            calculation_methods=PATTERNS,
+        ),
+        _death_basis(
+            mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
+            lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
+            expense_inflation=0.06,
+            expense_items=(
+                ExpenseItem("maintenance", "per_policy", 120.0),  # 10 per month
+            ),
+        ),
+    )
+    # no mortality/lapse -> in force stays 1.0
+    # maintenance[t] = 1.0 * 10 * (1.06)^(t/12)
+    assert np.isclose(res.cashflows.expense_cf[0, 0], 10.0)
+    assert np.isclose(res.cashflows.expense_cf[0, 12], 10.0 * 1.06)

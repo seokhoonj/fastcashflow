@@ -1,14 +1,14 @@
-"""Phase 2 validation -- mid-month discounting and CSM movement detail.
+"""Mid-month discounting precision validation.
 
-The discounting precision is hand-checked: claims arise during the month
-(discounted mid-month) and premiums at the start of the month. The CSM
-roll-forward identity is checked exactly.
+Claims arise during the month (discounted mid-month) and premiums at the
+start of the month. The present-value timing is hand-checked against an
+independent recomputation.
 """
 import numpy as np
 
 from fastcashflow import ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
+from conftest import PATTERNS, make_death_basis
 
 
 def _flat_assumptions(**overrides):
@@ -54,29 +54,3 @@ def test_mid_month_discounting():
     bel_all_start = float(np.sum(deaths * death_benefit * d_start)
                           - np.sum(inforce * premium * d_start))
     assert not np.isclose(res.bel_path[0, 0], bel_all_start)
-
-
-def test_csm_movement_identity():
-    """The CSM roll-forward decomposes exactly into accretion and release."""
-    basis = _flat_assumptions(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-        mortality_cv=0.05,
-    )
-    rng = np.random.default_rng(2)
-    n = 200
-    mps = ModelPoints(
-        issue_age=rng.integers(25, 55, n),
-        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000},
-        premium=rng.integers(8, 20, n) * 10_000,
-        term_months=rng.integers(60, 120, n),
-        calculation_methods=PATTERNS,
-    )
-    res = measure(mps, basis)
-
-    # csm[t+1] = csm[t] + accretion[t] - release[t], exactly
-    opening = res.csm_path[:, :-1]
-    closing = res.csm_path[:, 1:]
-    assert np.array_equal(closing, opening + res.csm_accretion - res.csm_release)
-
-    # accretion is interest on the opening balance
-    assert np.array_equal(res.csm_accretion, opening * basis.discount_monthly)

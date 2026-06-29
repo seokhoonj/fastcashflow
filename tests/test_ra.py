@@ -77,3 +77,20 @@ def test_invalid_ra_method_is_rejected():
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="ra_method"):
         measure(mp, _basis(ra_method="margins"))
+
+
+def test_risk_adjustment():
+    """RA = z(confidence) * mortality_cv * PV(claims), hand-checked."""
+    res = measure(
+        ModelPoints.single(
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
+            premium=12_000.0, term_months=2,
+            calculation_methods=PATTERNS,
+        ),
+        _basis(mortality_q=0.01, lapse_q=0.02, discount_annual=0.0,
+               ra_confidence=0.75, mortality_cv=0.20),
+    )
+    # zero discount; PV(claims) = 10000 + 9702 = 19702 (see test_gmm_handcalc)
+    pv_claims = 19702.0
+    z_75 = 0.6744897501960817
+    assert np.isclose(res.ra_path[0, 0], z_75 * 0.20 * pv_claims)

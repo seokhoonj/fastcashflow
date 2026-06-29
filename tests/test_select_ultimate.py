@@ -1,4 +1,4 @@
-"""Phase 1b validation -- select-and-ultimate mortality and duration-based lapse.
+"""Select-and-ultimate mortality and duration-based lapse validation.
 
 Both basis step at the first policy-year boundary, so a 24-month case
 exercises the select period, the ultimate period and the duration switch in
@@ -90,7 +90,7 @@ def test_select_ultimate_and_duration_lapse():
     assert np.isclose(res.bel_path[0, 0], pv_claims - pv_premiums)
 
 
-def test_value_matches_run_phase1b():
+def test_value_matches_run():
     """The fast path reproduces measure() under duration-varying basis."""
     rng = np.random.default_rng(11)
     n = 500

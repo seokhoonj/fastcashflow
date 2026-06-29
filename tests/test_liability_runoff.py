@@ -1,6 +1,6 @@
-"""Phase 4 validation -- BEL/RA roll-forward and the liability runoff.
+"""BEL/RA roll-forward and the liability-runoff validation.
 
-`measure()` now returns BEL, RA and CSM as month-by-month trajectories.
+`measure()` returns BEL, RA and CSM as month-by-month trajectories.
 The BEL trajectory is anchored to an independent backward recursion, and
 the total liability must run off to zero by the end of the term.
 """

@@ -1,10 +1,10 @@
-"""Phase 3b validation -- polars file I/O for model points and results."""
+"""Polars file I/O and streaming measurement for model points and results."""
 import fastcashflow as fcf
 import numpy as np
 import polars as pl
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, write_measurement
+from fastcashflow import ExpenseItem, ModelPoints, read_model_points, write_measurement
 from fastcashflow.gmm import measure
 from conftest import (PATTERNS, annual_from_monthly as _annual,
                       make_death_basis, mp_to_frames)
@@ -286,48 +286,6 @@ def test_measure_stream_rejects_global_duplicate_mp_id(tmp_path):
                            calculation_methods=PATTERNS, chunk_size=2,
                            validate_unique_mp_id=False)
     assert sorted((tmp_path / "o2").glob("part-*.parquet"))
-
-
-def test_load_sample_data_runs():
-    """The bundled sample data loads and values without error."""
-    mps = fcf.samples.model_points()
-    basis = next(iter(fcf.samples.basis().segments.values()))
-    assert mps.n_mp > 0
-    val = measure(mps, basis, full=False)
-    assert val.bel.shape == (mps.n_mp,)
-    assert val.csm.shape == (mps.n_mp,)
-
-
-def test_sample_data_dir_exposes_bundled_files():
-    """sample_data_dir() points at the directory holding the bundled inputs."""
-    d = sample_data_dir()
-    assert d.is_dir()
-    names = {p.name for p in d.iterdir()}
-    assert {"sample_basis.xlsx",
-            "sample_policies.csv",
-            "sample_coverages.csv"}.issubset(names)
-
-
-def test_describe_basis_renders_both_shapes(capsys):
-    """describe_basis prints a tree for a Basis and for a dict."""
-    from fastcashflow import describe_basis
-    basis_dict = fcf.samples.basis()
-    seg_basis = next(iter(basis_dict.segments.values()))
-
-    describe_basis(seg_basis)
-    out_one = capsys.readouterr().out
-    assert out_one.startswith("Basis")
-    assert "State transition rates" in out_one
-    assert "state_model" in out_one
-    assert "coverages" in out_one
-
-    describe_basis(basis_dict)
-    out_dict = capsys.readouterr().out
-    assert "BasisRouter" in out_dict
-    assert "7 segments" in out_dict
-    # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear
-    assert "('TERM_LIFE_A', 'GA')" in out_dict
-    assert "('TERM_LIFE_A', 'FC')" in out_dict
 
 
 def test_long_form_round_trips(tmp_path):

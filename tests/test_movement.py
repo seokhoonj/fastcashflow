@@ -597,3 +597,33 @@ def test_roll_forward_experience_chain_on_segmented_measurement():
         assert np.allclose(
             p.csm_opening + p.csm_assumption_change + p.csm_experience
             + p.csm_accretion - p.csm_release, p.csm_closing)
+
+
+def test_csm_movement_identity():
+    """The CSM roll-forward decomposes exactly into accretion and release."""
+    basis = make_death_basis(
+        mortality_q     = 0.01,
+        lapse_q         = 0.0,
+        discount_annual = 0.06,
+        ra_confidence   = 0.75,
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
+        mortality_cv    = 0.05,
+    )
+    rng = np.random.default_rng(2)
+    n = 200
+    mps = ModelPoints(
+        issue_age=rng.integers(25, 55, n),
+        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000},
+        premium=rng.integers(8, 20, n) * 10_000,
+        term_months=rng.integers(60, 120, n),
+        calculation_methods=PATTERNS,
+    )
+    res = measure(mps, basis)
+
+    # csm[t+1] = csm[t] + accretion[t] - release[t], exactly
+    opening = res.csm_path[:, :-1]
+    closing = res.csm_path[:, 1:]
+    assert np.array_equal(closing, opening + res.csm_accretion - res.csm_release)
+
+    # accretion is interest on the opening balance
+    assert np.array_equal(res.csm_accretion, opening * basis.discount_monthly)

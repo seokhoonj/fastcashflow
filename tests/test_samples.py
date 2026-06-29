@@ -188,3 +188,44 @@ def test_close_pack_nets_reinsurance_on_the_bundled_book():
     # this cession is a recoverable (negative carrying), so it lowers the net
     assert rei < 0.0
     assert net < iss
+
+
+def test_load_sample_data_runs():
+    """The bundled sample data loads and values without error."""
+    mps = fcf.samples.model_points()
+    basis = next(iter(fcf.samples.basis().segments.values()))
+    assert mps.n_mp > 0
+    val = measure(mps, basis, full=False)
+    assert val.bel.shape == (mps.n_mp,)
+    assert val.csm.shape == (mps.n_mp,)
+
+
+def test_sample_data_dir_exposes_bundled_files():
+    """sample_data_dir() points at the directory holding the bundled inputs."""
+    d = fcf.sample_data_dir()
+    assert d.is_dir()
+    names = {p.name for p in d.iterdir()}
+    assert {"sample_basis.xlsx",
+            "sample_policies.csv",
+            "sample_coverages.csv"}.issubset(names)
+
+
+def test_describe_basis_renders_both_shapes(capsys):
+    """describe_basis prints a tree for a Basis and for a dict."""
+    basis_dict = fcf.samples.basis()
+    seg_basis = next(iter(basis_dict.segments.values()))
+
+    fcf.describe_basis(seg_basis)
+    out_one = capsys.readouterr().out
+    assert out_one.startswith("Basis")
+    assert "State transition rates" in out_one
+    assert "state_model" in out_one
+    assert "coverages" in out_one
+
+    fcf.describe_basis(basis_dict)
+    out_dict = capsys.readouterr().out
+    assert "BasisRouter" in out_dict
+    assert "7 segments" in out_dict
+    # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear
+    assert "('TERM_LIFE_A', 'GA')" in out_dict
+    assert "('TERM_LIFE_A', 'FC')" in out_dict
