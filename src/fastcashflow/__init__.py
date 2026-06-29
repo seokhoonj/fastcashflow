@@ -56,7 +56,7 @@ from fastcashflow.plots import (
     plot_risk_adjustment,
     plot_stochastic,
 )
-from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
+from fastcashflow.pricing import solve_premium, interest_tvog
 from fastcashflow.pricing.vnb import VNB, vnb
 # Asset / solvency surface is namespace-only (fcf.solvency / fcf.alm / fcf.assets);
 # fcf.solvency is the merged facade over the _solvency (engine) + _solvency_assessment
@@ -111,7 +111,7 @@ __all__ = [
     "write_measurement",
     "sample_data_dir",
     "describe_basis",
-    "solve_premium", "interest_guarantee_tvog",
+    "solve_premium", "interest_tvog",
     "vnb", "VNB",
     # asset / solvency: namespace-only (members under fcf.solvency / fcf.alm / fcf.assets)
     "solvency", "alm", "assets",

@@ -27,7 +27,7 @@ from fastcashflow.pricing.profit import (
 from fastcashflow._measurement.tvog import TVOGResult
 
 __all__ = ["solve_premium", "statutory_reserve", "statutory_profit_signature",
-           "interest_guarantee_tvog", "vnb",
+           "interest_tvog", "vnb",
            "ProfitSignature", "TVOGResult", "VNB",
            "csm_plus_ra", "profit_margin", "signature", "irr", "break_even_year"]
 
@@ -231,7 +231,7 @@ def _forward_central_path(initial_prices: FloatArray) -> FloatArray:
     return one_month_disc ** (-12.0) - 1.0             # annual forward per month
 
 
-def interest_guarantee_tvog(
+def interest_tvog(
     model_points: ModelPoints,
     statutory_basis: Basis,
     rate_scenarios: FloatArray,
@@ -297,7 +297,7 @@ def interest_guarantee_tvog(
     """
     if isinstance(statutory_basis, BasisRouter):
         raise NotImplementedError(
-            "interest_guarantee_tvog takes a single Basis (the guarantee is per "
+            "interest_tvog takes a single Basis (the guarantee is per "
             "product); resolve the router per segment.")
 
     reserve, _ = statutory_reserve(model_points, statutory_basis)

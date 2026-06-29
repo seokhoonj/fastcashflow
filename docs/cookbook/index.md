@@ -241,7 +241,7 @@
 * - 8.4
   - [전통형 금리보증 비용 (TVOG)](workflow/interest-guarantee)
   - 최저보증이율의 비용을 intrinsic / 시간가치로 분해. `statutory_reserve` (준비금) +
-    `esg.simulate` (금리시나리오) 를 엮은 `interest_guarantee_tvog`.
+    `esg.simulate` (금리시나리오) 를 엮은 `interest_tvog`.
 * - 8.5
   - [임베디드밸류 / 신계약가치](workflow/embedded-value)
   - `VNB = PVFP - CoC - TVOG`. 이익 시그니처에서 요구자본 보유비용과 보증 시간가치를

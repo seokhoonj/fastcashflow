@@ -5,7 +5,7 @@ The VFA model owns its measurement result types here: the headline/trajectory
 :class:`PeriodMovement` / :class:`Reconciliation`, the paragraph-45 settlement
 :class:`SettlementMovement` / :class:`SettlementReconciliation` /
 :class:`SettlementAggregate`, the group-of-contracts :class:`GoCSettlement` and
-the guarantee :class:`GuaranteeTVOG`, with the ``CSM_BASIS_*`` vocabulary and
+the guarantee :class:`TVOG`, with the ``CSM_BASIS_*`` vocabulary and
 the settlement / reconciliation block specs. These are pure data containers (no
 projection logic); the measurement and settlement engine that produces them
 lives in :mod:`fastcashflow._measurement.vfa.engine`.
@@ -771,7 +771,7 @@ class GoCSettlement:
         return mp, state
 
 @dataclass(frozen=True, slots=True)
-class GuaranteeTVOG:
+class TVOG:
     """Total time value of a VFA / universal-life book's guarantees.
 
     A participating account can carry two economically distinct guarantees that

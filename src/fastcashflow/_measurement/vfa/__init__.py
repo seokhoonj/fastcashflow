@@ -9,7 +9,7 @@ fire the ``fcf.vfa`` facade, and an import cycle is therefore impossible.
 """
 from fastcashflow._measurement.vfa.results import (
     Measurement, Aggregate, PeriodMovement, Reconciliation, SettlementMovement,
-    SettlementReconciliation, SettlementAggregate, GoCSettlement, GuaranteeTVOG,
+    SettlementReconciliation, SettlementAggregate, GoCSettlement, TVOG,
     CSM_BASES, CSM_BASIS_INITIAL, CSM_BASIS_PROJECTED_RUNOFF,
     CSM_BASIS_CARRY_ONLY, CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS,
     _VFA_RECON_BLOCKS, _VFA_SETTLEMENT_LINES,

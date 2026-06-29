@@ -20,7 +20,7 @@ from fastcashflow._measurement.gmm import (
     SettlementMovement, SettlementReconciliation, SettlementAggregate)
 from fastcashflow._measurement.recognition import CSMRecognitionSchedule
 from fastcashflow.io import measure_stream, settle_stream
-from fastcashflow.pricing import interest_guarantee_tvog
+from fastcashflow.pricing import interest_tvog
 from fastcashflow._measurement.stochastic import measure_stochastic as stochastic
 from fastcashflow._trace.gmm import (
     trace,
@@ -38,7 +38,7 @@ from fastcashflow.solvency._assessment import (
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "CSMRecognitionSchedule",
-           "stochastic", "interest_guarantee_tvog",
+           "stochastic", "interest_tvog",
            # solvency verbs on a GMM book (consume fcf.solvency.* nouns)
            "required_capital", "assess", "assess_dynamic", "assess_stochastic",
            "trace", "trace_diff", "trace_bel_step", "trace_csm_step",

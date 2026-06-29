@@ -5,7 +5,7 @@
 
 - 전통형 / 금리연동형 상품의 **최저보증이율** 이 회사에 지우는 비용을, 결정론
   **intrinsic value** 와 변동성이 만드는 **시간가치 (TVOG)** 로 분해해 측정하는 법
-  (`pricing.interest_guarantee_tvog`, 별칭 `gmm.interest_guarantee_tvog`)
+  (`pricing.interest_tvog`, 별칭 `gmm.interest_tvog`)
 - 이 측정이 앞서 만든 두 조각 — `statutory_reserve` (통계준비금 `V_t`) 와
   `esg.simulate` (위험중립 금리시나리오) — 을 **엮어서** 나온다는 것
 - **시간가치가 곧 금리 변동성의 비용** 이라는 점 (`rate_vol` 을 키우면 intrinsic 은
@@ -77,7 +77,7 @@ scen = fcf.esg.simulate(maturities, rates, ufr=0.035, alpha=0.1,
     mean_reversion=0.05, rate_vol=0.015, equity_vol=0.0, correlation=0.0,
     n_scenarios=2000, n_time=120, seed=20240601)
 
-res = pricing.interest_guarantee_tvog(endow, stat, scen.rates,
+res = pricing.interest_tvog(endow, stat, scen.rates,
                                       initial_prices=scen.initial_prices)
 print(f"intrinsic value = {res.intrinsic_value:>13,.0f}")
 print(f"time value      = {res.time_value:>13,.0f}")
@@ -108,7 +108,7 @@ for vol in (0.005, 0.015, 0.030):
     s = fcf.esg.simulate(maturities, rates, ufr=0.035, alpha=0.1,
         mean_reversion=0.05, rate_vol=vol, equity_vol=0.0, correlation=0.0,
         n_scenarios=2000, n_time=120, seed=20240601)
-    r = pricing.interest_guarantee_tvog(endow, stat, s.rates,
+    r = pricing.interest_tvog(endow, stat, s.rates,
                                         initial_prices=s.initial_prices)
     print(f"{vol:>9.3f}{r.intrinsic_value:>13,.0f}{r.time_value:>14,.0f}")
 ```

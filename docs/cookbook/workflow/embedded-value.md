@@ -97,7 +97,7 @@ mats = np.array([1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 30.0])
 rts  = np.array([0.020, 0.022, 0.024, 0.026, 0.028, 0.030, 0.030])
 scen = fcf.esg.simulate(mats, rts, ufr=0.035, alpha=0.1, mean_reversion=0.05,
     rate_vol=0.015, equity_vol=0.0, correlation=0.0, n_scenarios=2000, n_time=n_time, seed=20240601)
-tv = pricing.interest_guarantee_tvog(endow, stat, scen.rates, initial_prices=scen.initial_prices)
+tv = pricing.interest_tvog(endow, stat, scen.rates, initial_prices=scen.initial_prices)
 
 ev2 = pricing.vnb(sig, reference_rate=0.05, discount_monthly=dm,
     required_capital=0.05, reserve=V, frictional_spread=0.06, tvog=tv.total_value)

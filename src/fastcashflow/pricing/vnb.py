@@ -15,7 +15,7 @@ capital the entity must hold behind the contract. This module adds that charge:
   the engine's cost-of-capital risk adjustment uses (a spread times the
   capital held over the run-off); here the capital is supplied by the caller.
 * ``TVOG`` -- the time value of options and guarantees (e.g. the interest-rate
-  guarantee cost from :func:`~fastcashflow.pricing.interest_guarantee_tvog`).
+  guarantee cost from :func:`~fastcashflow.pricing.interest_tvog`).
 
 This is a traditional single-rate VNB (v1): one ``reference_rate`` discounts both
 the profit and the capital-cost streams, with a ``frictional_spread`` charged on
@@ -95,7 +95,7 @@ def vnb(
         up). Zero gives a zero capital charge.
     tvog
         The time value of options and guarantees to deduct (e.g.
-        ``interest_guarantee_tvog(...).total_value``). Default 0.
+        ``interest_tvog(...).total_value``). Default 0.
 
     Returns
     -------

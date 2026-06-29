@@ -2,7 +2,7 @@
 
 A general-account contract credits its reserve at a minimum guaranteed rate
 ``i_g``; when the earned rate falls below ``i_g`` the entity funds the shortfall.
-``pricing.interest_guarantee_tvog`` prices that guarantee over earned-rate
+``pricing.interest_tvog`` prices that guarantee over earned-rate
 scenarios and splits the cost into intrinsic value (the central-path cost) and
 time value (the extra the convex ``max(i_g - r, 0)`` adds once rates vary).
 
@@ -43,7 +43,7 @@ def test_zero_volatility_collapses_to_intrinsic():
     n = _n_time(endow, stat)
     central = np.linspace(0.01, 0.04, n)          # dips below i_g early -> intrinsic > 0
     scen = np.tile(central, (5, 1))
-    res = pricing.interest_guarantee_tvog(endow, stat, scen, central_rates=central)
+    res = pricing.interest_tvog(endow, stat, scen, central_rates=central)
     assert np.isclose(res.time_value, 0.0, atol=1e-9)
     assert np.isclose(res.total_value, res.intrinsic_value)
     assert res.intrinsic_value > 0.0              # the central path does bite
@@ -55,7 +55,7 @@ def test_no_cost_when_earned_above_guarantee():
     endow, stat = _endow(), _stat(0.02)
     n = _n_time(endow, stat)
     scen = np.full((4, n), 0.05)
-    res = pricing.interest_guarantee_tvog(endow, stat, scen,
+    res = pricing.interest_tvog(endow, stat, scen,
                                           central_rates=np.full(n, 0.05))
     assert np.all(res.guarantee_cost == 0.0)
     assert res.total_value == 0.0
@@ -77,7 +77,7 @@ def test_tiny_hand_case():
     s1 = np.array([0.05, 0.01, 0.05])             # only month 1 below i_g
     scen = np.vstack([s0, s1])
     central = np.full(3, 0.05)                    # >= i_g everywhere -> intrinsic 0
-    res = pricing.interest_guarantee_tvog(endow, stat, scen, central_rates=central)
+    res = pricing.interest_tvog(endow, stat, scen, central_rates=central)
 
     ig_m = (1.0 + 0.025) ** (1.0 / 12.0) - 1.0
     rm_hi = (1.0 + 0.05) ** (1.0 / 12.0) - 1.0
@@ -98,7 +98,7 @@ def test_decomposition_identity():
     n = _n_time(endow, stat)
     rng = np.random.default_rng(0)
     scen = 0.025 + rng.normal(0.0, 0.02, size=(50, n))
-    res = pricing.interest_guarantee_tvog(endow, stat, scen,
+    res = pricing.interest_tvog(endow, stat, scen,
                                           central_rates=np.full(n, 0.025))
     assert np.isclose(res.total_value, res.intrinsic_value + res.time_value)
     assert np.isclose(res.total_value, float(res.guarantee_cost.mean()))
@@ -116,7 +116,7 @@ def test_forward_central_path_with_esg():
         maturities, rates, ufr=0.035, alpha=0.1, mean_reversion=0.05,
         rate_vol=0.015, equity_vol=0.0, correlation=0.0,
         n_scenarios=2000, n_time=n, seed=1)
-    res = pricing.interest_guarantee_tvog(
+    res = pricing.interest_tvog(
         endow, stat, scen.rates, initial_prices=scen.initial_prices)
     assert res.time_value > 0.0
     assert res.total_value >= res.intrinsic_value
@@ -130,19 +130,19 @@ def test_requires_central_or_initial_prices():
     endow, stat = _endow(), _stat()
     n = _n_time(endow, stat)
     with pytest.raises(ValueError, match="central_rates or initial_prices"):
-        pricing.interest_guarantee_tvog(endow, stat, np.full((3, n), 0.03))
+        pricing.interest_tvog(endow, stat, np.full((3, n), 0.03))
 
 
 def test_rejects_horizon_mismatch():
     endow, stat = _endow(), _stat()
     n = _n_time(endow, stat)
     with pytest.raises(ValueError, match="columns"):
-        pricing.interest_guarantee_tvog(
+        pricing.interest_tvog(
             endow, stat, np.full((3, n + 5), 0.03), central_rates=np.full(n, 0.02))
 
 
 def test_rejects_router():
     with pytest.raises(NotImplementedError, match="single Basis"):
-        pricing.interest_guarantee_tvog(
+        pricing.interest_tvog(
             _endow(), fcf.samples.basis("gmm"), np.full((2, 24), 0.03),
             central_rates=np.full(24, 0.02))

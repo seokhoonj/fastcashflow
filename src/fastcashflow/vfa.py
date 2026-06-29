@@ -20,7 +20,7 @@ point's VFA measurement.
 from fastcashflow._measurement.vfa import (
     Measurement, Aggregate, PeriodMovement, Reconciliation, SettlementMovement,
     SettlementReconciliation, SettlementAggregate, GoCSettlement, CSM_BASES,
-    GuaranteeTVOG,
+    TVOG,
     measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate,
     settle_stream, recognition_schedule, guarantee_tvog,
@@ -44,7 +44,7 @@ from fastcashflow.solvency._assessment import DynamicAssessment
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "tvog", "guarantee_tvog", "trace",
-           "trace_diff", "CSM_BASES", "Measurement", "GuaranteeTVOG",
+           "trace_diff", "CSM_BASES", "Measurement", "TVOG",
            "SettlementMovement", "moneyness_lapse_multiplier",
            "moneyness_lapse_scale", "stochastic",
            "liability_duration", "liability_dv01", "net_liability_cashflows",

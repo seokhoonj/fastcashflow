@@ -66,7 +66,7 @@ from fastcashflow._measurement.inforce import _inforce_rescale, _reconcile_state
 # Result types and the CSM-basis vocabulary live in the sibling results module
 # (this module is the engine that produces them).
 from fastcashflow._measurement.vfa.results import (
-    Aggregate, CSM_BASIS_CARRY_ONLY, GuaranteeTVOG, Measurement,
+    Aggregate, CSM_BASIS_CARRY_ONLY, TVOG, Measurement,
     SettlementAggregate, SettlementMovement, _VFA_SETTLEMENT_LINES)
 
 
@@ -1749,7 +1749,7 @@ def recognition_schedule(
 
 def guarantee_tvog(
     model_points: ModelPoints, basis: Basis, return_scenarios: FloatArray
-) -> GuaranteeTVOG:
+) -> TVOG:
     """Total guarantee time value of a VFA / universal-life book.
 
     Sums the two guarantees a participating account can carry -- the
@@ -1769,5 +1769,5 @@ def guarantee_tvog(
             model_points, basis, return_scenarios).time_value
     account_floor = float(np.sum(measure(
         model_points, basis, return_scenarios=return_scenarios).time_value))
-    return GuaranteeTVOG(
+    return TVOG(
         credited_rate_floor=credited_rate_floor, account_floor=account_floor)
