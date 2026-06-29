@@ -1,6 +1,7 @@
 """Value of new business (VNB) -- the new business value net of the cost of capital.
 
-VNB is the MCEV value-of-new-business metric (CFO Forum). A thin assembly over the
+VNB is the embedded value's new-business component -- the value created by writing
+new business (insurer appraisal value, IR disclosure). A thin assembly over the
 profit-testing layer: :func:`fastcashflow.pricing.csm_plus_ra` is pre-tax and
 *pre-required-capital* -- the present value of future profit with no charge for the
 capital the entity must hold behind the contract. This module adds that charge:
@@ -19,7 +20,7 @@ capital the entity must hold behind the contract. This module adds that charge:
 
 This is a traditional single-rate VNB (v1): one ``reference_rate`` discounts both
 the profit and the capital-cost streams, with a ``frictional_spread`` charged on
-the capital. A reference-rate / CRNHR (MCEV-style) decomposition, real regulatory
+the capital. A market-consistent (risk-free reference rate + CRNHR) decomposition, real regulatory
 required capital, and tax are deferred follow-ups -- v1 keeps the required capital
 caller-supplied and transparent.
 """

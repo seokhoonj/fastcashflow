@@ -12,7 +12,7 @@ Conventions (v1, pre-tax, pre-required-capital):
   the profit a contract is expected to release. It equals -BEL. IFRS 17 has no
   single defined term for CSM + RA (the two release differently -- RA on risk
   run-off, CSM on service), so the function names what it returns. This is NOT
-  the MCEV value of new business (``pricing.vnb``), which is net of the cost of
+  the value of new business (``pricing.vnb``), which is net of the cost of
   capital.
 * Profit signature = the per-period insurance service result -- on a
   best-estimate run that is the CSM release plus the RA release recognised each
@@ -65,7 +65,7 @@ class ProfitSignature:
 def csm_plus_ra(measurement) -> FloatArray:
     """CSM + RA per model point -- the present value at issue of the profit the
     contract is expected to release: ``CSM + RA - loss component`` (equivalently
-    ``-BEL``). Pre-tax and pre-required-capital. NOT the MCEV value of new
+    ``-BEL``). Pre-tax and pre-required-capital. NOT the value of new
     business (:func:`~fastcashflow.pricing.vnb`), which nets the cost of capital."""
     return measurement.csm + measurement.ra - measurement.loss_component
 
