@@ -57,7 +57,7 @@ def test_modelpoints_rejects_negative_count():
 
 
 # ---------------------------------------------------------------------------
-# Universal-life annuitization field guards (2-phase annuity, GAO conversion)
+# Universal-life annuitization field guards (deferred annuity, GAO conversion)
 # ---------------------------------------------------------------------------
 
 def _annz_mp(**overrides):

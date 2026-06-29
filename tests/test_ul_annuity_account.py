@@ -1,14 +1,14 @@
-"""Universal-life annuitization (2-phase whole-life annuity) -- hand-calc anchor.
+"""Universal-life annuitization (deferred whole-life annuity) -- hand-calc anchor.
 
-A universal-life annuity accumulates an account value (phase 1, the ordinary UL
+A universal-life annuity accumulates an account value (the accumulation phase, the ordinary UL
 roll) and at ``annuitization_months`` converts the balance to a guaranteed
-survival-contingent income (phase 2): ``locked_annuity_payment =
+survival-contingent income (the payout phase): ``locked_annuity_payment =
 max(account, GMAB) * annuitization_rate``, paid annuity-due on the surviving
 in-force, with no further premium / COI / surrender and no maturity lump (the
 balance was already converted -- paying a lump too would double-count). The
 payout decrements by mortality only (a life annuity in payment cannot lapse).
 
-These pin the conversion arithmetic, the phase-2 cash-flow hygiene, the
+These pin the conversion arithmetic, the payout-phase cash-flow hygiene, the
 mortality-only payout decrement, the longevity risk adjustment on the payout,
 and the conversion gain/loss landing in the CSM -- the load-bearing details the
 critique panel flagged.
@@ -51,7 +51,7 @@ def _annuity_mp(face, **fields):
 
 
 # ---------------------------------------------------------------------------
-# Conversion + phase-2 cash flows + the conversion gain in the CSM (the crux).
+# Conversion + payout-phase cash flows + the conversion gain in the CSM (the crux).
 # ---------------------------------------------------------------------------
 
 def test_ul_annuity_conversion_and_cashflows_hand_calc():
@@ -83,7 +83,7 @@ def test_ul_annuity_conversion_and_cashflows_hand_calc():
     locked = 1_000_000.0 * rate
     # Annuity-due from month 1, in-force = 1 (no decrement): three payments.
     assert np.allclose(proj.annuity_cf[0], [0.0, locked, locked, locked])
-    # Phase-2 hygiene: no account-death claim, no surrender, no maturity lump.
+    # Payout-phase hygiene: no account-death claim, no surrender, no maturity lump.
     assert np.allclose(proj.mortality_cf[0], 0.0)
     assert np.allclose(proj.surrender_cf[0], 0.0)
     assert np.isclose(proj.maturity_cf[0], 0.0)
@@ -166,7 +166,7 @@ def test_ul_annuity_payout_decrements_by_mortality_only():
 
 
 def test_ul_annuity_no_surrender_or_account_death_in_payout():
-    # Explicit phase-2 hygiene with decrements on: zero account-death claim and
+    # Explicit payout-phase hygiene with decrements on: zero account-death claim and
     # zero surrender for every payout month (the whole account benefit block is
     # bypassed once annuitized -- otherwise the converted balance would be paid
     # twice).

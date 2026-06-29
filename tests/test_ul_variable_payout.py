@@ -1,13 +1,13 @@
 """Universal-life variable (performance-linked) annuity payout -- hand-calc anchor.
 
-A variable-payout annuity re-floats the phase-2 income each elapsed month by the
+A variable-payout annuity re-floats the payout-phase income each elapsed month by the
 ratio of the realised fund return to an assumed interest rate (AIR):
 
     payment_k = locked_annuity_payment * ((1 + fund) / (1 + air))^k,  k = t - A
 
 This is the annuity-unit method: the unit count is fixed at conversion, the unit
 value floats with the fund. Under VFA (discount = fund return) the fund cancels,
-so BEL(phase 2) = the initial payment valued as a FIXED annuity at the AIR -- the
+so BEL(payout phase) = the initial payment valued as a FIXED annuity at the AIR -- the
 investment risk passes through to the policyholder, only longevity stays with the
 insurer. A variable payout is a direct-participation feature: it is measured
 through ``vfa.measure`` and rejected on ``gmm.measure``.

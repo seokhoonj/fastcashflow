@@ -118,7 +118,7 @@ def test_ul_annuity_sample_measures_through_gmm():
     assert np.all(m.csm >= 0.0)
     # It is an account book -- the GMM measurement carries the account sidecar.
     assert m.cashflows.account is not None
-    # Annuitizing contracts pay a survival income (phase 2) and no maturity lump.
+    # Annuitizing contracts pay a survival income (the payout phase) and no maturity lump.
     assert np.all(m.cashflows.annuity_cf.sum(axis=1) > 0.0)
     assert np.allclose(m.cashflows.maturity_cf, 0.0)
     assert isinstance(m, fcf.gmm.Measurement)
