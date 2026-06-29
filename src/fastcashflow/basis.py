@@ -322,6 +322,19 @@ class ExpenseItem:
     value
         Numeric value -- an amount per policy for ``base="per_policy"``,
         a fraction (0..1) for the proportional bases.
+    months
+        Optional window (in policy months) over which the item is charged,
+        in force, instead of the category's natural timing. ``None`` (the
+        default) keeps that timing -- ``acquisition`` once at ``t=0``,
+        ``maintenance`` every in-force month. An integer ``N >= 1`` charges
+        the item only on policy months ``[0, N)`` -- the installment /
+        front-loaded commission shape (the Korean installment new-business
+        commission): e.g.
+        ``ExpenseItem("acquisition", "premium", 0.02, months=12)`` is a
+        first-year % premium commission trail, charged on the in-force,
+        premium-paying book for the first 12 months. Supported only on the
+        ``"premium"`` base (the commission use case); the t=0 lump stays a
+        plain ``months=None`` ``(acquisition, premium)`` row.
 
     Notes
     -----
@@ -336,6 +349,7 @@ class ExpenseItem:
     category: str
     base: str
     value: float
+    months: "int | None" = None
 
     def __post_init__(self) -> None:
         # Validate at construction, not deep in derive_expense_components at
@@ -351,6 +365,21 @@ class ExpenseItem:
             raise ValueError(
                 f"ExpenseItem value must be finite, got {self.value!r}"
             )
+        # ``months`` (the installment / commission window) is supported only on
+        # the premium base -- the front-loaded % premium commission trail. A
+        # window on a t=0 lump or a surrender/face/claim base is meaningless, so
+        # reject it loudly rather than silently ignore.
+        if self.months is not None:
+            if self.base != "premium":
+                raise ValueError(
+                    "ExpenseItem 'months' (the installment window) is supported "
+                    f"only on base='premium', not {self.base!r}"
+                )
+            if int(self.months) < 1:
+                raise ValueError(
+                    f"ExpenseItem 'months' must be a positive integer, got "
+                    f"{self.months!r}"
+                )
 
 
 #: WHAT an expense is for -- the ``ExpenseItem.category`` axis. The first three
@@ -408,7 +437,7 @@ SURRENDER_VALUE_BASES = (
 def derive_expense_components(
     expense_items: tuple["ExpenseItem", ...], n_time: int,
     inflation_index: FloatArray | None = None,
-) -> tuple[float, float, float, FloatArray, FloatArray, float, float]:
+) -> tuple[float, float, FloatArray, FloatArray, FloatArray, float, float]:
     """Project ``expense_items`` onto the seven kernel-side primitives.
 
     Each :class:`ExpenseItem` is dispatched by its ``(category, base)``
@@ -420,9 +449,13 @@ def derive_expense_components(
       rows. Paid at ``t=0`` on annualized premium.
     - ``acquisition_per_policy`` -- sum of ``value`` over ``(acquisition, per_policy)``
       rows. Paid at ``t=0`` per policy.
-    - ``maintenance_premium`` -- sum of ``value`` over ``(maintenance, premium)``
-      AND ``(collection, premium)`` rows. Charged each premium-paying month
-      on the actual premium.
+    - ``maintenance_premium[t]`` -- per-month % premium rate: ``(maintenance,
+      premium)`` AND ``(collection, premium)`` rows charge ``value`` every
+      premium-paying month, and any ``months``-windowed ``premium`` row (a
+      commission / installment leg, including a windowed ``(acquisition,
+      premium)`` row) charges ``value`` only on months ``[0, months)``. The
+      kernel applies ``inforce_t * maintenance_premium[t] * monthly_premium``
+      while premium is paid. Not inflated (it rides the premium).
     - ``maintenance_per_policy[t]`` -- per-month per-policy maintenance: each
       ``(maintenance, per_policy)`` row contributes ``value / 12 *
       inflation_index[t]``.
@@ -456,7 +489,7 @@ def derive_expense_components(
     """
     acquisition_premium = 0.0
     acquisition_per_policy = 0.0
-    maintenance_premium = 0.0
+    maintenance_premium = np.zeros(n_time, dtype=np.float64)
     maintenance_per_policy = np.zeros(n_time, dtype=np.float64)
     lae = np.zeros(n_time, dtype=np.float64)
     maintenance_surrender_value = 0.0
@@ -472,9 +505,21 @@ def derive_expense_components(
         if prim == "acquisition_per_policy":
             acquisition_per_policy += row.value
         elif prim == "acquisition_premium":
-            acquisition_premium += row.value
+            # No window -> the classic t=0 acquisition lump (on annualized
+            # premium). A window -> a front-loaded commission trail charged on
+            # the in-force, premium-paying book over months [0, months), which
+            # rides the same per-month maintenance_premium array.
+            if row.months is None:
+                acquisition_premium += row.value
+            else:
+                maintenance_premium[:int(row.months)] += row.value
         elif prim == "maintenance_premium":
-            maintenance_premium += row.value
+            # % premium every premium-paying month (no window) or only over the
+            # first ``months`` months (a windowed / installment % premium leg).
+            if row.months is None:
+                maintenance_premium += row.value
+            else:
+                maintenance_premium[:int(row.months)] += row.value
         elif prim == "maintenance_per_policy":
             maintenance_per_policy += row.value * inflation_index / 12.0
         elif prim == "lae":

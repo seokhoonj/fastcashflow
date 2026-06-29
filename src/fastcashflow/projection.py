@@ -646,7 +646,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
                 if t == 0 else 0.0)
             maintenance_premium_expense = (
-                inforce_t * maintenance_premium * ann_prem / 12.0
+                inforce_t * maintenance_premium[t] * ann_prem / 12.0
                 if t < premium_term else 0.0)
             maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
             # LAE applies to claim + morbidity claims only --
@@ -930,7 +930,7 @@ def _project_kernel_semi_markov(
                 cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
                 if t == 0 else 0.0)
             maintenance_premium_expense = (
-                inforce_t * maintenance_premium * ann_prem / 12.0
+                inforce_t * maintenance_premium[t] * ann_prem / 12.0
                 if t < premium_term else 0.0)
             maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
             # LAE applies to claim + morbidity claims only --

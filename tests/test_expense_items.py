@@ -27,7 +27,8 @@ def test_empty_rows_emit_zero_primitives():
     """Empty rows: every primitive is zero across the projection horizon."""
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
      maintenance_per_policy, lae, _surr, _face) = derive_expense_components((), 24)
-    assert acquisition_premium == 0.0 and acquisition_per_policy == 0.0 and maintenance_premium == 0.0
+    assert acquisition_premium == 0.0 and acquisition_per_policy == 0.0
+    assert maintenance_premium.shape == (24,) and np.all(maintenance_premium == 0.0)
     assert maintenance_per_policy.shape == (24,) and lae.shape == (24,)
     assert np.all(maintenance_per_policy == 0.0) and np.all(lae == 0.0)
 
@@ -38,7 +39,7 @@ def test_acquisition_per_policy_row_lands_in_its_primitive():
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
      maintenance_per_policy, lae, _surr, _face) = derive_expense_components(rows, 12)
     assert acquisition_per_policy == 50_000.0
-    assert acquisition_premium == 0.0 and maintenance_premium == 0.0
+    assert acquisition_premium == 0.0 and np.all(maintenance_premium == 0.0)
     assert np.all(maintenance_per_policy == 0.0) and np.all(lae == 0.0)
 
 
@@ -48,7 +49,7 @@ def test_acquisition_premium_row_lands_in_its_primitive():
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
      maintenance_per_policy, lae, _surr, _face) = derive_expense_components(rows, 12)
     assert acquisition_premium == 1.20
-    assert acquisition_per_policy == 0.0 and maintenance_premium == 0.0
+    assert acquisition_per_policy == 0.0 and np.all(maintenance_premium == 0.0)
 
 
 def test_maintenance_premium_row_lands_in_its_primitive():
@@ -56,7 +57,81 @@ def test_maintenance_premium_row_lands_in_its_primitive():
     rows = (ExpenseItem("maintenance", "premium", 0.01),)
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
      maintenance_per_policy, lae, _surr, _face) = derive_expense_components(rows, 12)
-    assert maintenance_premium == 0.01
+    assert maintenance_premium.shape == (12,) and np.all(maintenance_premium == 0.01)
+
+
+# ---------------------------------------------------------------------------
+# months window -- the installment / front-loaded commission shape. A
+# ``months=N`` premium row is charged on the in-force, premium-paying book over
+# policy months [0, N) only, riding the per-month maintenance_premium array.
+# Hand-calc: with a flat rate r over a window of N months on a horizon of T,
+# maintenance_premium == [r]*N + [0]*(T-N).
+# ---------------------------------------------------------------------------
+
+def test_windowed_maintenance_premium_charges_only_first_n_months():
+    """A windowed ``(maintenance, premium)`` row charges its rate on months
+    ``[0, N)`` and zero thereafter -- the installment leg."""
+    rows = (ExpenseItem("maintenance", "premium", 0.01, months=3),)
+    _, _, maintenance_premium, _, _, _, _ = derive_expense_components(rows, 12)
+    expected = np.array([0.01, 0.01, 0.01] + [0.0] * 9)
+    assert maintenance_premium.shape == (12,)
+    assert np.array_equal(maintenance_premium, expected)
+
+
+def test_windowed_acquisition_premium_routes_to_window_not_t0_lump():
+    """A windowed ``(acquisition, premium)`` row is a front-loaded commission
+    trail, NOT the t=0 lump: it lands in maintenance_premium[0:N], leaving the
+    scalar acquisition_premium at zero."""
+    rows = (ExpenseItem("acquisition", "premium", 0.02, months=12),)
+    acquisition_premium, _, maintenance_premium, _, _, _, _ = derive_expense_components(rows, 24)
+    assert acquisition_premium == 0.0                    # NOT the t=0 lump
+    assert np.all(maintenance_premium[:12] == 0.02)
+    assert np.all(maintenance_premium[12:] == 0.0)
+
+
+def test_unwindowed_acquisition_premium_stays_t0_lump():
+    """Without ``months`` an ``(acquisition, premium)`` row stays the classic
+    t=0 lump on annualized premium -- the window is opt-in, not a default."""
+    rows = (ExpenseItem("acquisition", "premium", 0.02),)
+    acquisition_premium, _, maintenance_premium, _, _, _, _ = derive_expense_components(rows, 24)
+    assert acquisition_premium == 0.02
+    assert np.all(maintenance_premium == 0.0)
+
+
+def test_windowed_and_level_premium_rows_sum_within_window():
+    """A level (unwindowed) maintenance row and a windowed commission leg sum
+    inside the window and the level rate alone survives after it."""
+    rows = (
+        ExpenseItem("maintenance", "premium", 0.005),            # level, every month
+        ExpenseItem("acquisition", "premium", 0.02, months=3),   # commission, first 3
+    )
+    _, _, maintenance_premium, _, _, _, _ = derive_expense_components(rows, 12)
+    expected = np.array([0.025, 0.025, 0.025] + [0.005] * 9)
+    assert np.array_equal(maintenance_premium, expected)
+
+
+def test_window_longer_than_horizon_is_clipped():
+    """A window wider than the projection horizon charges every month, with no
+    index error -- the slice clips to the array length."""
+    rows = (ExpenseItem("maintenance", "premium", 0.01, months=100),)
+    _, _, maintenance_premium, _, _, _, _ = derive_expense_components(rows, 12)
+    assert np.all(maintenance_premium == 0.01)
+
+
+def test_months_on_nonpremium_base_raises():
+    """A window on a non-premium base is meaningless and rejected at construction."""
+    with pytest.raises(ValueError, match="only on base='premium'"):
+        ExpenseItem("maintenance", "per_policy", 36_000.0, months=12)
+    with pytest.raises(ValueError, match="only on base='premium'"):
+        ExpenseItem("acquisition", "per_policy", 50_000.0, months=12)
+
+
+def test_months_must_be_positive_integer():
+    """A zero / negative window is rejected at construction."""
+    with pytest.raises(ValueError, match="positive integer"):
+        ExpenseItem("maintenance", "premium", 0.01, months=0)
+    with pytest.raises(ValueError, match="positive integer"):
+        ExpenseItem("acquisition", "premium", 0.02, months=-1)
 
 
 def test_maintenance_per_policy_grows_with_inflation():
@@ -213,6 +288,72 @@ def test_empty_expense_items_is_zero_expense_basis():
 
 
 # ---------------------------------------------------------------------------
+# months window -- end-to-end through the kernel. The window leg is the same
+# per-month maintenance_premium path regardless of category, so the kernel
+# treats a windowed acquisition leg and a windowed maintenance leg identically,
+# and a full-horizon window collapses to the level (unwindowed) charge.
+# ---------------------------------------------------------------------------
+
+def _bare_premium_basis(items):
+    """A minimal death basis carrying only the given expense items -- isolates
+    the premium-base expense path for the window tests."""
+    import numpy as np
+
+    def mort(s, ia, d, ic, em):
+        return np.full(d.shape, 0.0008)
+
+    def lapse(s, ia, d, ic, em):
+        return np.full(d.shape, 0.05)
+
+    return fcf.Basis(
+        mortality_annual=mort, lapse_annual=lapse,
+        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
+        expense_inflation=0.03,
+        expense_items=items,
+        coverages=(CoverageRate("DEATH", mort),),
+    )
+
+
+def test_windowed_acquisition_and_maintenance_legs_are_kernel_equivalent():
+    """A windowed ``(acquisition, premium)`` commission leg and a windowed
+    ``(maintenance, premium)`` leg of the same rate and window produce an
+    identical expense cash flow -- both ride maintenance_premium[0:N]."""
+    import numpy as np
+    mp = _term_life_mp()
+    acq_leg = fcf.gmm.measure(
+        mp, _bare_premium_basis((ExpenseItem("acquisition", "premium", 0.30, months=12),)))
+    mnt_leg = fcf.gmm.measure(
+        mp, _bare_premium_basis((ExpenseItem("maintenance", "premium", 0.30, months=12),)))
+    assert np.array_equal(acq_leg.cashflows.expense_cf, mnt_leg.cashflows.expense_cf)
+
+
+def test_full_horizon_window_equals_unwindowed_maintenance():
+    """A window covering the whole premium-paying term charges exactly what the
+    level (unwindowed) maintenance row charges -- the window only ever removes
+    later months, so a term-wide window removes none."""
+    import numpy as np
+    mp = _term_life_mp()                                  # term_months=120
+    windowed = fcf.gmm.measure(
+        mp, _bare_premium_basis((ExpenseItem("maintenance", "premium", 0.02, months=120),)))
+    level = fcf.gmm.measure(
+        mp, _bare_premium_basis((ExpenseItem("maintenance", "premium", 0.02),)))
+    assert np.array_equal(windowed.cashflows.expense_cf, level.cashflows.expense_cf)
+
+
+def test_windowed_commission_lifts_expense_only_within_window():
+    """A windowed commission leg lifts the expense cash flow on the window
+    months and leaves later months untouched -- the front-loaded shape."""
+    import numpy as np
+    mp = _term_life_mp()
+    base = fcf.gmm.measure(mp, _bare_premium_basis(()))
+    comm = fcf.gmm.measure(
+        mp, _bare_premium_basis((ExpenseItem("acquisition", "premium", 0.30, months=6),)))
+    diff = comm.cashflows.expense_cf[0] - base.cashflows.expense_cf[0]
+    assert np.all(diff[:6] > 0.0)                         # lifted inside the window
+    assert np.allclose(diff[6:], 0.0)                     # untouched after
+
+
+# ---------------------------------------------------------------------------
 # maintenance_surrender_value -- maintenance charged on the in-force surrender
 # value (the Korean "% of surrender-reserve" reserve-linked maintenance). Unlike the
 # other bases its kernel input is a single scalar rate: the base (the in-force
@@ -227,7 +368,7 @@ def test_maintenance_surrender_value_lands_in_sixth_primitive():
     infl = (1.05) ** (np.arange(12) / 12.0)        # would inflate an inflating basis
     a_pr, a_fx, b_pr, gamma, lae, surr, _face = derive_expense_components(rows, 12, infl)
     assert surr == 0.004                            # scalar, not inflated
-    assert a_pr == 0.0 and a_fx == 0.0 and b_pr == 0.0
+    assert a_pr == 0.0 and a_fx == 0.0 and np.all(b_pr == 0.0)
     assert np.all(gamma == 0.0) and np.all(lae == 0.0)
 
 
@@ -338,7 +479,7 @@ def test_face_lands_in_seventh_primitive():
     out = derive_expense_components(rows, 12)
     assert len(out) == 7
     assert out[6] == 0.0002                          # face primitive
-    assert out[0] == 0.0 and out[1] == 0.0 and out[2] == 0.0
+    assert out[0] == 0.0 and out[1] == 0.0 and np.all(out[2] == 0.0)
 
 
 def _face_mp(is_main, face=100_000_000.0):

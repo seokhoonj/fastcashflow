@@ -268,7 +268,7 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             line(12, "pv_surrender += (eff_lapse")
             line(12, "                 * cum_premium * surrender_curve[t] * discount_factor_mid_t)")
     line(12, "acquisition_expense = cnt * (acquisition_premium * ann_prem + acquisition_per_policy) if t == 0 else 0.0")
-    line(12, "maintenance_premium_expense = inforce_t * maintenance_premium * ann_prem / 12.0 if t < premium_term else 0.0")
+    line(12, "maintenance_premium_expense = inforce_t * maintenance_premium[t] * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]")
     if use_lae:
         line(12, "lae_expense = lae[t] * "
@@ -759,7 +759,7 @@ def _semi_markov_kernel_source(
             line(12, "pv_surrender += (eff_lapse")
             line(12, "                 * cum_premium * surrender_curve[t] * discount_factor_mid_t)")
     line(12, "acquisition_expense = cnt * (acquisition_premium * ann_prem + acquisition_per_policy) if t == 0 else 0.0")
-    line(12, "maintenance_premium_expense = inforce_t * maintenance_premium * ann_prem / 12.0 if t < premium_term else 0.0")
+    line(12, "maintenance_premium_expense = inforce_t * maintenance_premium[t] * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]")
     if use_lae:
         line(12, "lae_expense = lae[t] * "
@@ -1081,7 +1081,7 @@ def _scalar_kernel(issue_index, sex, term_months, contract_boundary_months,
             ann_prem = prem * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
             acquisition_expense = (cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
                      if t == 0 else 0.0)
-            maintenance_premium_expense = (inforce_t * maintenance_premium * ann_prem / 12.0
+            maintenance_premium_expense = (inforce_t * maintenance_premium[t] * ann_prem / 12.0
                     if t < premium_term else 0.0)
             maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
             if use_lae:

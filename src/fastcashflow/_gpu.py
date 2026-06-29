@@ -114,7 +114,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         ann_prem = premium[mp] * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
         acquisition_expense = (cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
                  if t == 0 else 0.0)
-        maintenance_premium_expense = (inforce_t * maintenance_premium * ann_prem / 12.0
+        maintenance_premium_expense = (inforce_t * maintenance_premium[t] * ann_prem / 12.0
                 if t < premium_term else 0.0)
         maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
         lae_expense = lae[t] * inforce_t * (claim_rate + morb_rate)
