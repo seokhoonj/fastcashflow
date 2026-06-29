@@ -5,9 +5,10 @@ claims, expenses and the in-force run-off do not depend on it, so
 ``FCF = A - premium * B``. Two valuations pin down ``A`` and ``B``, and the
 premium that meets a profitability target then has a closed form -- no iteration.
 
-Profit testing (re-exported from :mod:`fastcashflow.pricing.profit`) adds the value and
-emergence of new business: the present-value metrics (``csm_plus_ra``, ``profit_margin``),
-the per-period ``signature``, and the rate metrics (``irr``, ``break_even_year``).
+Profit testing (re-exported from :mod:`fastcashflow.pricing.profit`) adds the
+inception value (CSM + RA) and profit emergence: the present-value metrics
+(``csm_plus_ra``, ``profit_margin``), the per-period ``signature``, and the rate
+metrics (``irr``, ``break_even_year``).
 """
 from __future__ import annotations
 

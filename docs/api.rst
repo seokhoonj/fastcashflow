@@ -256,8 +256,9 @@ Pricing
 Profit testing
 --------------
 
-New-business value and profit emergence over a GMM measurement, plus the
-traditional net-level-premium reserve and statutory profit test.
+Inception value (CSM + RA), profit margin and profit emergence over a GMM
+measurement, plus the traditional net-level-premium reserve and statutory
+profit test.
 
 .. autofunction:: fastcashflow.pricing.csm_plus_ra
 

@@ -237,6 +237,18 @@ def test_expense_tables_months_on_nonpremium_base_raises_at_read():
         _read_expense_tables(ws)
 
 
+def test_expense_tables_months_rejects_fractional():
+    """A fractional ``months`` cell (12.5) is rejected at read, NOT silently
+    truncated to 12 -- the reader passes the value through to ExpenseItem's
+    whole-number validation rather than calling ``int()`` on it."""
+    ws = _expense_ws([
+        ("table_id", "category", "base", "value", "months"),
+        ("T", "acquisition", "premium", 0.30, 12.5),
+    ])
+    with pytest.raises(ValueError, match="whole number"):
+        _read_expense_tables(ws)
+
+
 # ---------------------------------------------------------------------------
 # io.py state range check
 # ---------------------------------------------------------------------------

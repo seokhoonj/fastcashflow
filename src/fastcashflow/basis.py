@@ -375,11 +375,18 @@ class ExpenseItem:
                     "ExpenseItem 'months' (the installment window) is supported "
                     f"only on base='premium', not {self.base!r}"
                 )
+            if self.months != int(self.months):
+                raise ValueError(
+                    f"ExpenseItem 'months' must be a whole number of months, "
+                    f"got {self.months!r}"
+                )
             if int(self.months) < 1:
                 raise ValueError(
                     f"ExpenseItem 'months' must be a positive integer, got "
                     f"{self.months!r}"
                 )
+            # Store as a plain int so a workbook float like 12.0 normalises.
+            object.__setattr__(self, "months", int(self.months))
 
 
 #: WHAT an expense is for -- the ``ExpenseItem.category`` axis. The first three

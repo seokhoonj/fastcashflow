@@ -134,6 +134,19 @@ def test_months_must_be_positive_integer():
         ExpenseItem("acquisition", "premium", 0.02, months=-1)
 
 
+def test_months_must_be_a_whole_number():
+    """A fractional window (12.5) is rejected, not silently truncated to 12."""
+    with pytest.raises(ValueError, match="whole number"):
+        ExpenseItem("acquisition", "premium", 0.30, months=12.5)
+
+
+def test_months_whole_float_normalises_to_int():
+    """A whole-number float (12.0 -- how a spreadsheet cell often arrives)
+    normalises to a plain ``int``."""
+    it = ExpenseItem("acquisition", "premium", 0.30, months=12.0)
+    assert it.months == 12 and isinstance(it.months, int)
+
+
 def test_maintenance_per_policy_grows_with_inflation():
     """A ``maintenance_per_policy`` row's monthly amount is ``value/12 * inflation_index[t]``.
 

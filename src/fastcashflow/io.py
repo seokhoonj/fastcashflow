@@ -406,9 +406,11 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
         tid = str(r["table_id"]).strip()
         # ``months`` is an optional column -- a blank cell, or a sheet without
         # the column at all, leaves the window unset (the category-default
-        # timing). ExpenseItem validates the value (premium base only, >= 1).
+        # timing). Pass the numeric value through (do NOT truncate -- a 12.5
+        # would silently become 12); ExpenseItem validates it is a positive
+        # whole number (premium base only) and normalises it to int.
         m = r.get("months")
-        months = int(m) if m not in (None, "") else None
+        months = None if m in (None, "") else float(m)
         by_id.setdefault(tid, []).append(ExpenseItem(
             category=str(r["category"]).strip(),
             base=str(r["base"]).strip(),
