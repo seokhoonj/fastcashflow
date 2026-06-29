@@ -187,6 +187,57 @@ def test_flex_rate_table_rejects_duplicate_rows():
 
 
 # ---------------------------------------------------------------------------
+# io.py expense_tables -- the optional ``months`` window column. A file can
+# express the installment / commission window, not only the code path.
+# ---------------------------------------------------------------------------
+
+def _expense_ws(rows):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "expense_tables"
+    for r in rows:
+        ws.append(list(r))
+    return ws
+
+
+def test_expense_tables_reads_months_window():
+    """A ``months`` cell propagates onto the ExpenseItem -- the file can set
+    the installment / commission window, matching the code-built form."""
+    ws = _expense_ws([
+        ("table_id", "category", "base", "value", "months"),
+        ("T", "acquisition", "premium", 0.30, 12),
+        ("T", "maintenance", "premium", 0.02, None),   # blank -> no window
+    ])
+    items = _read_expense_tables(ws)["T"]
+    by_cat = {it.category: it for it in items}
+    assert by_cat["acquisition"].months == 12
+    assert by_cat["maintenance"].months is None
+
+
+def test_expense_tables_without_months_column_is_backward_compatible():
+    """A sheet with no ``months`` column at all reads every row with
+    ``months=None`` -- existing workbooks are unaffected."""
+    ws = _expense_ws([
+        ("table_id", "category", "base", "value"),
+        ("T", "acquisition", "per_policy", 700000),
+        ("T", "maintenance", "premium", 0.02),
+    ])
+    items = _read_expense_tables(ws)["T"]
+    assert all(it.months is None for it in items)
+
+
+def test_expense_tables_months_on_nonpremium_base_raises_at_read():
+    """A ``months`` window on a non-premium base is rejected as the row is
+    constructed -- the file inherits ExpenseItem's own validation."""
+    ws = _expense_ws([
+        ("table_id", "category", "base", "value", "months"),
+        ("T", "maintenance", "per_policy", 90000, 12),
+    ])
+    with pytest.raises(ValueError, match="only on base='premium'"):
+        _read_expense_tables(ws)
+
+
+# ---------------------------------------------------------------------------
 # io.py state range check
 # ---------------------------------------------------------------------------
 

@@ -382,8 +382,12 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
 
     Each row is one ``ExpenseItem`` -- the item-form expense ledger the
     engine dispatches on. Columns: ``table_id``, ``category``, ``base``,
-    ``value``. The same ``table_id`` may span multiple rows (an acquisition
-    row plus a maintenance row, plus a claims row, ...).
+    ``value``, and an optional ``months`` -- the installment / commission
+    window (premium base only; charges the row over policy months ``[0, N)``
+    instead of the category's natural timing). A blank or absent ``months``
+    cell is ``None`` (the category-default timing). The same ``table_id`` may
+    span multiple rows (an acquisition row plus a maintenance row, plus a
+    claims row, ...).
     Returns ``{table_id: tuple[ExpenseItem, ...]}`` for the
     segments-side ``expense_table`` lookup to consume. Inflation is
     *not* a row attribute -- it lives on the segment as the global
@@ -400,10 +404,16 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
             )
             first = False
         tid = str(r["table_id"]).strip()
+        # ``months`` is an optional column -- a blank cell, or a sheet without
+        # the column at all, leaves the window unset (the category-default
+        # timing). ExpenseItem validates the value (premium base only, >= 1).
+        m = r.get("months")
+        months = int(m) if m not in (None, "") else None
         by_id.setdefault(tid, []).append(ExpenseItem(
             category=str(r["category"]).strip(),
             base=str(r["base"]).strip(),
             value=float(r["value"]),
+            months=months,
         ))
     return {tid: tuple(rows) for tid, rows in by_id.items()}
 
