@@ -1,4 +1,4 @@
-"""Phase (b) Stage 3 -- disability cash flows.
+"""Disability cash flows.
 
 Two cash-flow kinds attached to the state machine as data:
 

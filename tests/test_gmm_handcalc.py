@@ -17,7 +17,7 @@ Z_75 = 0.6744897501960817
 
 
 def _basis(**overrides):
-    """Defaults for the phase-0 hand calc -- 1%/month mortality, 2%/month lapse."""
+    """Defaults for the hand calc -- 1%/month mortality, 2%/month lapse."""
     kw = dict(
         mortality_q     = 0.01,
         lapse_q         = 0.02,

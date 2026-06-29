@@ -1,4 +1,4 @@
-"""Phase-3 reporting layer: write_close_pack -- the multi-sheet xlsx artifact.
+"""Reporting layer: write_close_pack -- the multi-sheet xlsx artifact.
 
 write_close_pack serialises a ClosePackage to a multi-sheet workbook (the
 aggregate IFRS 17 statements) plus an optional per-model-point parquet sidecar

@@ -1,4 +1,4 @@
-"""Hand-calculation validation of the Phase (c) semi-Markov path.
+"""Hand-calculation validation of the semi-Markov path.
 
 Tests are intentionally tiny -- one contract, a couple of months, simple
 rates -- so each BEL can be derived by hand and matched to ``measure()``.
@@ -177,11 +177,11 @@ def test_reincidence_rate_zero_in_exclusion_window():
 
 
 # ---------------------------------------------------------------------------
-# measure() <-> measure() parity (Phase (c) -- semi-Markov detailed projection)
+# measure() <-> measure() parity (semi-Markov detailed projection)
 # ---------------------------------------------------------------------------
 #
-# project_cashflows() drives measure() and used to be Markov-only. Phase (c)
-# adds a cohort-aware detailed kernel that mirrors measure()'s semi-Markov
+# project_cashflows() drives measure() and used to be Markov-only. A
+# cohort-aware detailed kernel mirrors measure()'s semi-Markov
 # path. These tests confirm the two paths still produce identical headline
 # numbers on the cancer-reincidence model, across single contracts and a
 # mixed portfolio.
@@ -654,7 +654,7 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
     """End-to-end: a rate sheet with an ``elapsed`` column is loaded via the
     schema-flex reader, plugged into ``ci_reincidence_annual``, and fed
     through the semi-Markov engine. Swapping the sheet to all-zero
-    reincidence changes the BEL -- proving the Phase 1B-1 ``elapsed`` axis
+    reincidence changes the BEL -- proving the ``elapsed`` axis
     actually flows from the workbook into the ``(sex, age, year, cohort)``
     evaluation."""
     import openpyxl

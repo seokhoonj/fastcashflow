@@ -1,6 +1,6 @@
 """Mass-lapse reinsurance (lapse-XL) -- hand-calc anchors.
 
-Phase A: the loss density (the mass-lapse own-funds strain per unit of excess
+The loss density (the mass-lapse own-funds strain per unit of excess
 lapse) and the excess-of-loss layer mechanics (attachment / detachment /
 capacity / recovery).
 """
@@ -216,7 +216,7 @@ def test_counterparty_default_collateral_floors_at_zero():
 
 
 # ---------------------------------------------------------------------------
-# Cedant solvency relief (Phase B2 -- full diversified picture)
+# Cedant solvency relief (full diversified picture)
 # ---------------------------------------------------------------------------
 
 def _mass_biting_book():
@@ -403,7 +403,7 @@ def test_relief_exceeding_module_raises():
 
 
 # ---------------------------------------------------------------------------
-# Lapse tail distribution F(L) -- the reinsurer baseline (Phase D)
+# Lapse tail distribution F(L) -- the reinsurer baseline
 # ---------------------------------------------------------------------------
 
 def test_lapse_distribution_reproduces_anchors():
@@ -471,7 +471,7 @@ def test_value_at_risk_returns_sf_anchor():
 
 
 # ---------------------------------------------------------------------------
-# Reinsurer pricing (Phase D)
+# Reinsurer pricing
 # ---------------------------------------------------------------------------
 
 def test_price_treaty_components():
@@ -645,7 +645,7 @@ def test_cedant_relief_zero_when_updown_dominates():
 
 
 # ---------------------------------------------------------------------------
-# Reinsurer-side IFRS 17 treaty measurement (Phase D3)
+# Reinsurer-side IFRS 17 treaty measurement
 # ---------------------------------------------------------------------------
 
 def _pricing(premium, expected_recovery, capital):
@@ -711,7 +711,7 @@ def test_assumed_treaty_rejects_bad_duration():
 
 
 # ---------------------------------------------------------------------------
-# Analysis package report (Phase E)
+# Analysis package report
 # ---------------------------------------------------------------------------
 
 def test_report_runs_and_is_ascii():

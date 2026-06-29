@@ -1,6 +1,6 @@
 """The in-force state machine -- StateModel as product input.
 
-Phase (b) Stage 2: a product declares its states, transitions and
+A product declares its states, transitions and
 premium-paying states as data. The default active / waiver model is one
 StateModel among many; these tests drive custom ones through both the fused
 ``value`` and the detailed ``measure`` path, with the figures derived by hand

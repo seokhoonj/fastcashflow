@@ -1,4 +1,4 @@
-"""Phase-3 reporting layer: report.by_period -- period bucketing.
+"""Reporting layer: report.by_period -- period bucketing.
 
 by_period generalises annual() to arbitrary reporting-period lengths and to a
 calendar basis (each cohort shifted by its inception month). The reports are

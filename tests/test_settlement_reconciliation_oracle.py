@@ -1,4 +1,4 @@
-"""Phase-0 refactor test net: the settlement reconciliation surface oracle.
+"""Refactor test net: the settlement reconciliation surface oracle.
 
 The four settlement Movement / Reconciliation / Aggregate families and their
 reconcile / write dispatch are exercised only incidentally inside the per-feature

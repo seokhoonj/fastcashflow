@@ -1,4 +1,4 @@
-"""Phase-3 reporting layer: the period close (statement of financial position).
+"""Reporting layer: the period close (statement of financial position).
 
 close() assembles the close pack from a reporting period's settlement
 reconciliations. The keystone is the SoFP carrying-amount split (LRC excluding

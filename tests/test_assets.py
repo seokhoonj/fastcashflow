@@ -549,7 +549,7 @@ def test_preferred_equity_by_rating_table20():
 
 
 # ---------------------------------------------------------------------------
-# Dynamic asset engine -- Phase A: asset cash-flow projection
+# Dynamic asset engine -- asset cash-flow projection
 # ---------------------------------------------------------------------------
 
 def test_portfolio_cashflows_places_coupons_and_redemption():

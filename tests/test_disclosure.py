@@ -1,4 +1,4 @@
-"""Phase-3 reporting layer: the canonical tidy frame (to_frame foundation).
+"""Reporting layer: the canonical tidy frame (to_frame foundation).
 
 reconciliation_to_frame turns a settlement reconciliation into the lean canonical
 disclosure frame. Two guarantees pinned here: the block spec covers EXACTLY the

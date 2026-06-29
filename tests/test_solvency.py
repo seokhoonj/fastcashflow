@@ -550,7 +550,7 @@ def test_sii_catastrophe_is_seventh_sub_risk():
 
 
 # ---------------------------------------------------------------------------
-# Dynamic lapse -- the lapse<->rate coupling (the dynamic asset engine, Phase D)
+# Dynamic lapse -- the lapse<->rate coupling (the dynamic asset engine)
 # ---------------------------------------------------------------------------
 
 def test_dynamic_lapse_multiplier_hand_calc():
@@ -708,8 +708,8 @@ def test_vfa_interest_scr_hand_calc():
 
 
 # ---------------------------------------------------------------------------
-# scale_state_rate -- a named state-machine transition-rate shock (Phase 1 of
-# the Solvency II disability sub-risk: Article 139 recovery / inception shocks).
+# scale_state_rate -- a named state-machine transition-rate shock (the
+# Solvency II disability sub-risk: Article 139 recovery / inception shocks).
 # ---------------------------------------------------------------------------
 
 def _di_recovery_model() -> StateModel:
@@ -808,7 +808,7 @@ def test_scale_state_rate_rejects_unknown_rate():
 
 # ---------------------------------------------------------------------------
 # scale_coverages_first_year -- the +35% year-1 / +25%-thereafter duration split
-# (Phase 2 of the Solvency II disability inception shock, Article 139).
+# (the Solvency II disability inception shock, Article 139).
 # ---------------------------------------------------------------------------
 
 _MORB = CalculationMethod.MORBIDITY
@@ -877,7 +877,7 @@ def test_scale_coverages_first_year_bel_exceeds_uniform():
 
 # ---------------------------------------------------------------------------
 # SII disability sub-risk (Article 139) -- the composed inception-up / recovery-down
-# shock wired into SII (Phase 3).
+# shock wired into SII.
 # ---------------------------------------------------------------------------
 
 def _disability_only_regime():

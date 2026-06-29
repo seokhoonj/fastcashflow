@@ -220,7 +220,7 @@ def test_legacy_three_arg_user_lambda_is_adapted():
     the engine now passes; the issue_class and elapsed arguments are
     discarded by the wrapper."""
     basis = Basis(
-        # Pre-Phase-1A user lambda style -- 3 positional args.
+        # The legacy 3-positional-arg user lambda style.
         mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
         lapse_annual=lambda sex, age, dur: np.full(dur.shape, 0.01),
         discount_annual=0.03,

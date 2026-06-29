@@ -1,4 +1,4 @@
-"""Phase-1 refactor: correctness-seam guards.
+"""Refactor: correctness-seam guards.
 
 Three inputs the dataclass permits but the settle paths handled badly -- a
 per-MP lock_in_rate that crashed opaquely on one path while another guarded it
