@@ -57,7 +57,7 @@ from fastcashflow.plots import (
     plot_stochastic,
 )
 from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
-from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
+from fastcashflow.pricing.vnb import VNB, vnb
 # Asset / solvency surface is namespace-only (fcf.solvency / fcf.alm / fcf.assets);
 # fcf.solvency is the merged facade over the _solvency (engine) + _solvency_assessment
 # (assembly) impl modules. No flat re-exports -- reach members via their namespace.
@@ -112,7 +112,7 @@ __all__ = [
     "sample_data_dir",
     "describe_basis",
     "solve_premium", "interest_guarantee_tvog",
-    "embedded_value", "EmbeddedValue",
+    "vnb", "VNB",
     # asset / solvency: namespace-only (members under fcf.solvency / fcf.alm / fcf.assets)
     "solvency", "alm", "assets",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",

@@ -3,7 +3,7 @@
 Hand-calc anchors on tiny cases plus the structural identities: the new business
 value is the negated BEL (equivalently CSM + RA - loss component), the profit
 margin is that over the PV of premiums, and the IFRS 17 profit signature
-re-discounts to the NBV.
+re-discounts to the CSM+RA.
 """
 import numpy as np
 import pytest
@@ -38,41 +38,41 @@ def _mp(premium=200_000.0, term=3, db=100_000_000.0):
 # New business value -- the core identity
 # ---------------------------------------------------------------------------
 
-def test_nbv_is_negated_bel():
-    """NBV = -BEL = CSM + RA - loss component, for any contract."""
+def test_csm_plus_ra_is_negated_bel():
+    """CSM+RA = -BEL = CSM + RA - loss component, for any contract."""
     m = fcf.gmm.measure(_mp(term=120), _basis(mortality_cv=0.10, discount_annual=0.03))
-    v = pricing.nbv(m)
+    v = pricing.csm_plus_ra(m)
     assert np.allclose(v, -m.bel)
     assert np.allclose(v, m.csm + m.ra - m.loss_component)
 
 
-def test_nbv_handcalc():
-    """A 3-month, 1-policy contract, zero discount, no RA: NBV is the by-hand
+def test_csm_plus_ra_handcalc():
+    """A 3-month, 1-policy contract, zero discount, no RA: CSM+RA is the by-hand
     PV(premiums) - PV(claims)."""
     q, P, db, term = 0.01, 200_000.0, 100_000_000.0, 3
     m = fcf.gmm.measure(_mp(premium=P, term=term, db=db), _basis())
     mq = 1.0 - (1.0 - q) ** (1.0 / 12.0)
     inforce = (1.0 - mq) ** np.arange(term)
     deaths = inforce * mq
-    nbv_hand = float(np.sum(inforce * P) - np.sum(deaths * db))
-    assert np.isclose(pricing.nbv(m)[0], nbv_hand, rtol=1e-9)
+    csm_plus_ra_hand = float(np.sum(inforce * P) - np.sum(deaths * db))
+    assert np.isclose(pricing.csm_plus_ra(m)[0], csm_plus_ra_hand, rtol=1e-9)
 
 
-def test_profit_margin_is_nbv_over_pv_premium():
-    """Profit margin = NBV / PV(premiums); zero discount makes PV(premiums) the
+def test_profit_margin_is_csm_plus_ra_over_pv_premium():
+    """Profit margin = CSM+RA / PV(premiums); zero discount makes PV(premiums) the
     in-force-weighted premium sum."""
     q, P, term = 0.01, 200_000.0, 3
     m = fcf.gmm.measure(_mp(premium=P, term=term), _basis())
     mq = 1.0 - (1.0 - q) ** (1.0 / 12.0)
     pv_prem = float(np.sum((1.0 - mq) ** np.arange(term) * P))
     assert np.isclose(pricing.profit_margin(m)[0],
-                      pricing.nbv(m)[0] / pv_prem, rtol=1e-9)
+                      pricing.csm_plus_ra(m)[0] / pv_prem, rtol=1e-9)
 
 
-def test_nbv_works_on_fast_path():
-    """NBV uses only the headline CSM/RA/loss, so it works without full=True."""
+def test_csm_plus_ra_works_on_fast_path():
+    """CSM+RA uses only the headline CSM/RA/loss, so it works without full=True."""
     m = fcf.gmm.measure(_mp(term=120), _basis(mortality_cv=0.1), full=False)
-    assert np.all(np.isfinite(pricing.nbv(m)))
+    assert np.all(np.isfinite(pricing.csm_plus_ra(m)))
 
 
 def test_profit_margin_needs_full():
@@ -86,14 +86,14 @@ def test_profit_margin_needs_full():
 # Profit signature
 # ---------------------------------------------------------------------------
 
-def test_signature_reconciles_to_nbv():
+def test_signature_reconciles_to_csm_plus_ra():
     """The IFRS 17 profit signature (per-year insurance service result) discounts
-    back, mid-year, to approximately the portfolio NBV."""
+    back, mid-year, to approximately the portfolio CSM+RA."""
     m = fcf.gmm.measure(_mp(premium=200_000.0, term=120),
                         _basis(mortality_cv=0.10, discount_annual=0.03))
     sig = pricing.signature(m, period_months=12)
     assert sig.profit.shape[0] == 10                       # 120 months / 12
-    assert np.isclose(sig.present_value(0.03), float(pricing.nbv(m).sum()),
+    assert np.isclose(sig.present_value(0.03), float(pricing.csm_plus_ra(m).sum()),
                       rtol=0.01)
 
 

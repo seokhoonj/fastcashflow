@@ -259,7 +259,7 @@ Profit testing
 New-business value and profit emergence over a GMM measurement, plus the
 traditional net-level-premium reserve and statutory profit test.
 
-.. autofunction:: fastcashflow.pricing.nbv
+.. autofunction:: fastcashflow.pricing.csm_plus_ra
 
 .. autofunction:: fastcashflow.pricing.profit_margin
 
@@ -278,9 +278,9 @@ traditional net-level-premium reserve and statutory profit test.
 
 .. autofunction:: fastcashflow.pricing.interest_guarantee_tvog
 
-.. autofunction:: fastcashflow.embedded_value
+.. autofunction:: fastcashflow.vnb
 
-.. autoclass:: fastcashflow.EmbeddedValue
+.. autoclass:: fastcashflow.VNB
    :members:
 
 Required capital (solvency)

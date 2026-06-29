@@ -4,14 +4,14 @@
 :class: tip
 
 - 이익 시그니처에서 **신계약가치 (VNB = Value of New Business)** 를 뽑는 법 --
-  `VNB = PVFP - CoC - TVOG` (`pricing.embedded_value`)
-- `nbv` (= -BEL) 가 **필요자본 차감 전** 가치인 데 비해, VNB 는 **요구자본 보유비용
+  `VNB = PVFP - CoC - TVOG` (`pricing.vnb`)
+- `csm_plus_ra` (= -BEL) 가 **필요자본 차감 전** 가치인 데 비해, VNB 는 **요구자본 보유비용
   (CoC)** 과 **보증의 시간가치 (TVOG)** 까지 차감한 주주가치라는 것
 - 앞 세 챕터의 조각이 한 식으로 합성되는 자리 -- 이익 시그니처 (8.3) +
   요구자본 보유비용 + 금리보증 TVOG (8.4)
 :::
 
-[8.3 수익성 분석](profit-testing) 의 `nbv` 는 **세전 · 필요자본 차감 전** 가치였습니다.
+[8.3 수익성 분석](profit-testing) 의 `csm_plus_ra` 는 **세전 · 필요자본 차감 전** 가치였습니다.
 실제 주주가치는 거기서 두 가지를 더 뺍니다 -- 계약 뒤에 **요구자본을 묶어 두는 비용**
 과, **금리보증 같은 옵션의 시간가치**. 그 결과가 **신계약가치 (VNB)** 입니다:
 
@@ -23,7 +23,7 @@
   (1/12) 부과해 현가.
 - **TVOG** -- 보증의 시간가치 ([8.4](interest-guarantee) 의 금리보증 TVOG 등).
 
-`embedded_value` 는 이 셋을 합성만 합니다 -- 어느 것도 새로 투영하지 않습니다.
+`vnb` 는 이 셋을 합성만 합니다 -- 어느 것도 새로 투영하지 않습니다.
 
 ## 최소 작동 예제 -- PVFP 에서 VNB 로
 
@@ -51,7 +51,7 @@ gross = fcf.ModelPoints.single(
 sig = pricing.statutory_profit_signature(gross, stat, stat)
 
 # no capital, no TVOG -- VNB is just the PVFP
-ev0 = pricing.embedded_value(sig, reference_rate=0.05)
+ev0 = pricing.vnb(sig, reference_rate=0.05)
 print(f"PVFP = {ev0.pvfp:,.0f}   VNB = {ev0.value:,.0f}")
 ```
 
@@ -72,7 +72,7 @@ n_time = reserve.shape[1] - 1
 dm = discount_monthly_curve(stat, n_time)
 V  = reserve.sum(axis=0)                     # (n_time+1,) portfolio reserve
 
-ev1 = pricing.embedded_value(sig, reference_rate=0.05, discount_monthly=dm,
+ev1 = pricing.vnb(sig, reference_rate=0.05, discount_monthly=dm,
                              required_capital=0.05, reserve=V, frictional_spread=0.06)
 print(f"PVFP {ev1.pvfp:,.0f}  CoC {ev1.cost_of_capital:,.0f}  VNB {ev1.value:,.0f}")
 ```
@@ -99,7 +99,7 @@ scen = fcf.esg.simulate(mats, rts, ufr=0.035, alpha=0.1, mean_reversion=0.05,
     rate_vol=0.015, equity_vol=0.0, correlation=0.0, n_scenarios=2000, n_time=n_time, seed=20240601)
 tv = pricing.interest_guarantee_tvog(endow, stat, scen.rates, initial_prices=scen.initial_prices)
 
-ev2 = pricing.embedded_value(sig, reference_rate=0.05, discount_monthly=dm,
+ev2 = pricing.vnb(sig, reference_rate=0.05, discount_monthly=dm,
     required_capital=0.05, reserve=V, frictional_spread=0.06, tvog=tv.total_value)
 print(f"PVFP {ev2.pvfp:,.0f}  CoC {ev2.cost_of_capital:,.0f}  "
       f"TVOG {ev2.tvog:,.0f}  VNB {ev2.value:,.0f}")
@@ -116,7 +116,7 @@ PVFP 7,087,977 에서 자본비용 1,129,822 와 보증의 시간가치 4,000,48
 
 ## 결과 해석 / 변형
 
-- **이익 기준 선택** -- `embedded_value` 는 `ProfitSignature` 만 보므로, 전통형
+- **이익 기준 선택** -- `vnb` 는 `ProfitSignature` 만 보므로, 전통형
   `statutory_profit_signature` 든 IFRS17 `signature` 든 넘기는 대로 씁니다. 전통형
   (이익에 RA 가 없음) + 임의 요구자본이 깔끔한 기본 조합입니다.
 - **요구자본 정의** -- v1 은 caller 공급 (명시 경로 또는 `factor x reserve`).
@@ -132,12 +132,12 @@ PVFP 7,087,977 에서 자본비용 1,129,822 와 보증의 시간가치 4,000,48
   조합이 더 깔끔합니다.
 - **스칼라 factor 는 reserve 필요** -- `required_capital` 을 스칼라로 주면
   `reserve=` 를 함께 줘야 합니다 (명시적 에러).
-- **세전 (v1)** -- `nbv` / `signature` 와 같이 세전입니다. 세금은 후속.
+- **세전 (v1)** -- `csm_plus_ra` / `signature` 와 같이 세전입니다. 세금은 후속.
 
 ## 인접 레시피
 
 - [8.3 수익성 분석 / profit-testing](profit-testing) -- PVFP 의 출발점인 이익
-  시그니처와 `nbv` (필요자본 차감 전).
+  시그니처와 `csm_plus_ra` (필요자본 차감 전).
 - [8.4 전통형 금리보증 비용 (TVOG)](interest-guarantee) -- VNB 의 TVOG 차감항.
 - [경제적 가정 -- 시나리오 생성](../basics/scenario-generation) -- TVOG 가 쓰는
   금리시나리오.

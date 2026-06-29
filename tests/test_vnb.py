@@ -11,7 +11,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import pricing
-from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
+from fastcashflow.pricing.vnb import VNB, vnb
 from fastcashflow.pricing.profit import ProfitSignature
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._numerics import _cost_of_capital_ra
@@ -28,8 +28,8 @@ def _sig(profit=(100.0, 80.0)):
 def test_zero_capital_zero_tvog_is_pvfp():
     """With no capital charge and no TVOG, the value is just the PVFP."""
     sig = _sig()
-    ev = embedded_value(sig, reference_rate=0.03)
-    assert isinstance(ev, EmbeddedValue)
+    ev = vnb(sig, reference_rate=0.03)
+    assert isinstance(ev, VNB)
     assert ev.cost_of_capital == 0.0
     assert ev.tvog == 0.0
     assert np.isclose(ev.pvfp, sig.present_value(0.03))
@@ -47,7 +47,7 @@ def test_cost_of_capital_flat_closed_form():
     df_bom = np.concatenate([[1.0], np.cumprod(1.0 / (1.0 + dm))[:-1]])  # (n,)
     expected = (s / 12.0) * C * float(df_bom.sum())
 
-    ev = embedded_value(_sig(), reference_rate=0.03, discount_monthly=dm,
+    ev = vnb(_sig(), reference_rate=0.03, discount_monthly=dm,
                         required_capital=rc, frictional_spread=s)
     assert np.isclose(ev.cost_of_capital, expected)
     assert np.isclose(ev.value, ev.pvfp - expected)
@@ -66,7 +66,7 @@ def test_cost_of_capital_reproduces_engine_coc_ra():
     rc = cl.ra_path.sum(axis=0)                         # (n_time+1,) portfolio capital
     coc_rate = 0.06
 
-    ev = embedded_value(_sig(), reference_rate=0.03, discount_monthly=dm,
+    ev = vnb(_sig(), reference_rate=0.03, discount_monthly=dm,
                         required_capital=rc, frictional_spread=coc_rate)
     expected = float(_cost_of_capital_ra(cl.ra_path, dm, coc_rate)[:, 0].sum())
     assert np.isclose(ev.cost_of_capital, expected)
@@ -74,8 +74,8 @@ def test_cost_of_capital_reproduces_engine_coc_ra():
 
 def test_tvog_subtracts():
     sig = _sig()
-    ev0 = embedded_value(sig, reference_rate=0.03)
-    evt = embedded_value(sig, reference_rate=0.03, tvog=25.0)
+    ev0 = vnb(sig, reference_rate=0.03)
+    evt = vnb(sig, reference_rate=0.03, tvog=25.0)
     assert evt.tvog == 25.0
     assert np.isclose(evt.value, ev0.value - 25.0)
 
@@ -88,13 +88,13 @@ def test_scalar_capital_factor_matches_explicit_array():
     V = np.linspace(0.0, 5_000_000.0, n + 1)            # (n+1,) reserve path
     kw = dict(reference_rate=0.025, discount_monthly=dm, frictional_spread=0.05)
 
-    ev_scalar = embedded_value(_sig(), required_capital=0.04, reserve=V, **kw)
-    ev_array = embedded_value(_sig(), required_capital=0.04 * V, **kw)
+    ev_scalar = vnb(_sig(), required_capital=0.04, reserve=V, **kw)
+    ev_array = vnb(_sig(), required_capital=0.04 * V, **kw)
     assert np.isclose(ev_scalar.cost_of_capital, ev_array.cost_of_capital)
     assert ev_scalar.cost_of_capital > 0.0
 
 
 def test_scalar_capital_needs_reserve():
     with pytest.raises(ValueError, match="reserve="):
-        embedded_value(_sig(), reference_rate=0.03, discount_monthly=np.full(12, 0.002),
+        vnb(_sig(), reference_rate=0.03, discount_monthly=np.full(12, 0.002),
                        required_capital=0.04, frictional_spread=0.05)

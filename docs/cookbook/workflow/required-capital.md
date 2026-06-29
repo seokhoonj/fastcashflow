@@ -211,7 +211,7 @@ print(f"  K-ICS  ratio @ AC=20,000,000 : {fcf.solvency.ratio(k, 20_000_000.0):.1
 ```
 
 같은 가용자본이라도 SII 가 SCR 이 커 비율이 낮습니다. SCR 은 [8.5 임베디드밸류](embedded-value)
-의 자본비용으로도 들어갑니다 -- `embedded_value(..., required_capital=s.scr_path,
+의 자본비용으로도 들어갑니다 -- `vnb(..., required_capital=s.scr_path,
 frictional_spread=basis.cost_of_capital_rate)` 로 요구자본 보유비용을 VNB 에서 차감.
 
 ## 함정 / 검증

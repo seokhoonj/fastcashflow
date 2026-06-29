@@ -1,9 +1,9 @@
-"""Embedded value -- the value of new business net of the cost of capital.
+"""Value of new business (VNB) -- the new business value net of the cost of capital.
 
-A thin assembly over the profit-testing layer. The new business value reported by
-:func:`fastcashflow.pricing.nbv` is pre-tax and *pre-required-capital* -- it is the
-present value of future profit with no charge for the capital the entity must hold
-behind the contract. This module adds that charge:
+VNB is the MCEV value-of-new-business metric (CFO Forum). A thin assembly over the
+profit-testing layer: :func:`fastcashflow.pricing.csm_plus_ra` is pre-tax and
+*pre-required-capital* -- the present value of future profit with no charge for the
+capital the entity must hold behind the contract. This module adds that charge:
 
     VNB = PVFP - CoC - TVOG
 
@@ -17,11 +17,11 @@ behind the contract. This module adds that charge:
 * ``TVOG`` -- the time value of options and guarantees (e.g. the interest-rate
   guarantee cost from :func:`~fastcashflow.pricing.interest_guarantee_tvog`).
 
-This is a traditional single-rate embedded value (v1): one ``reference_rate``
-discounts both the profit and the capital-cost streams, with a ``frictional_spread``
-charged on the capital. A reference-rate / CRNHR (MCEV-style) decomposition, real
-regulatory required capital, and tax are deferred follow-ups -- v1 keeps the
-required capital caller-supplied and transparent.
+This is a traditional single-rate VNB (v1): one ``reference_rate`` discounts both
+the profit and the capital-cost streams, with a ``frictional_spread`` charged on
+the capital. A reference-rate / CRNHR (MCEV-style) decomposition, real regulatory
+required capital, and tax are deferred follow-ups -- v1 keeps the required capital
+caller-supplied and transparent.
 """
 from __future__ import annotations
 
@@ -35,12 +35,12 @@ from fastcashflow.pricing.profit import ProfitSignature
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class EmbeddedValue:
+class VNB:
     """The value of new business, split into its components (portfolio total).
 
     ``pvfp`` is the present value of future shareholder profit; ``cost_of_capital``
     the frictional cost of holding the required capital; ``tvog`` the time value of
-    options and guarantees. :attr:`value` is the new business value
+    options and guarantees. :attr:`value` is the value of new business
     ``pvfp - cost_of_capital - tvog`` (positive = value-creating).
     """
 
@@ -54,7 +54,7 @@ class EmbeddedValue:
         return self.pvfp - self.cost_of_capital - self.tvog
 
 
-def embedded_value(
+def vnb(
     profit_signature: ProfitSignature,
     *,
     reference_rate: float,
@@ -63,7 +63,7 @@ def embedded_value(
     reserve: FloatArray | None = None,
     frictional_spread: float = 0.0,
     tvog: float = 0.0,
-) -> EmbeddedValue:
+) -> VNB:
     """Value of new business from a profit signature and a cost of capital.
 
     ``VNB = PVFP - CoC - TVOG`` (portfolio total). The function is basis-agnostic:
@@ -99,7 +99,7 @@ def embedded_value(
 
     Returns
     -------
-    EmbeddedValue
+    VNB
         ``pvfp``, ``cost_of_capital``, ``tvog`` and the derived ``value``.
 
     Notes
@@ -149,7 +149,7 @@ def embedded_value(
         # length, do NOT truncate to n_time (that would drop the boundary column).
         coc = float(frictional_spread / 12.0 * np.sum(rc * df_bom[:rc.shape[0]]))
 
-    return EmbeddedValue(pvfp=float(pvfp), cost_of_capital=coc, tvog=float(tvog))
+    return VNB(pvfp=float(pvfp), cost_of_capital=coc, tvog=float(tvog))
 
 
-__all__ = ["EmbeddedValue", "embedded_value"]
+__all__ = ["VNB", "vnb"]

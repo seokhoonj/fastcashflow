@@ -6,7 +6,7 @@ claims, expenses and the in-force run-off do not depend on it, so
 premium that meets a profitability target then has a closed form -- no iteration.
 
 Profit testing (re-exported from :mod:`fastcashflow.pricing.profit`) adds the value and
-emergence of new business: the present-value metrics (``nbv``, ``profit_margin``),
+emergence of new business: the present-value metrics (``csm_plus_ra``, ``profit_margin``),
 the per-period ``signature``, and the rate metrics (``irr``, ``break_even_year``).
 """
 from __future__ import annotations
@@ -20,16 +20,16 @@ from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
+from fastcashflow.pricing.vnb import VNB, vnb
 from fastcashflow.pricing.profit import (
-    ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
+    ProfitSignature, break_even_year, irr, csm_plus_ra, profit_margin, signature,
 )
 from fastcashflow._measurement.tvog import TVOGResult
 
 __all__ = ["solve_premium", "statutory_reserve", "statutory_profit_signature",
-           "interest_guarantee_tvog", "embedded_value",
-           "ProfitSignature", "TVOGResult", "EmbeddedValue",
-           "nbv", "profit_margin", "signature", "irr", "break_even_year"]
+           "interest_guarantee_tvog", "vnb",
+           "ProfitSignature", "TVOGResult", "VNB",
+           "csm_plus_ra", "profit_margin", "signature", "irr", "break_even_year"]
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
@@ -291,7 +291,7 @@ def interest_guarantee_tvog(
         ``intrinsic_value`` the central-path cost; ``time_value`` the TVOG
         (``mean(cost) - intrinsic``); ``total_value`` their sum. All are ``>= 0``:
         the guarantee is a cost to the entity. Net it by ADDING ``total_value`` to
-        the fulfilment cash flows / BEL (subtracting from CSM / NBV);
+        the fulfilment cash flows / BEL (subtracting from CSM / csm_plus_ra);
         ``intrinsic_value`` is the part a deterministic central-rate valuation
         already captures, ``time_value`` the extra only stochastic scenarios show.
     """

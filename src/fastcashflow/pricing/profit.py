@@ -1,17 +1,22 @@
 """Profit testing -- value and emergence of new business.
 
-A thin pricing layer over the GMM measurement: the present-value metrics (new
-business value, profit margin) and the period-by-period profit signature, plus
-the rate metrics (IRR, break-even) on a shareholder cash-flow stream. It assembles
-already-computed pieces -- the inception BEL/RA/CSM, ``report`` (the IFRS 17 P&L
-emergence) and the discount curve -- rather than re-projecting anything.
+A thin pricing layer over the GMM measurement: the present-value metrics
+(``csm_plus_ra``, ``profit_margin``) and the period-by-period profit signature,
+plus the rate metrics (IRR, break-even) on a shareholder cash-flow stream. It
+assembles already-computed pieces -- the inception BEL/RA/CSM, ``report`` (the
+IFRS 17 P&L emergence) and the discount curve -- rather than re-projecting
+anything.
 
 Conventions (v1, pre-tax, pre-required-capital):
-* New business value (NBV) = CSM + RA - loss component = the present value, at
-  issue, of the profit a contract is expected to release. It equals -BEL.
+* ``csm_plus_ra`` = CSM + RA - loss component = the present value, at issue, of
+  the profit a contract is expected to release. It equals -BEL. IFRS 17 has no
+  single defined term for CSM + RA (the two release differently -- RA on risk
+  run-off, CSM on service), so the function names what it returns. This is NOT
+  the MCEV value of new business (``pricing.vnb``), which is net of the cost of
+  capital.
 * Profit signature = the per-period insurance service result -- on a
   best-estimate run that is the CSM release plus the RA release recognised each
-  period; its present value at the locked-in rate is the NBV.
+  period; its present value at the locked-in rate is ``csm_plus_ra``.
 * IRR / break-even act on a shareholder cash-flow stream the caller supplies
   (the profit signature net of the day-0 new-business strain); they only carry
   meaning once that strain makes the stream change sign (the statutory profit
@@ -50,17 +55,18 @@ class ProfitSignature:
         """Present value of the profit stream at a flat annual ``annual_rate``,
         each period discounted to issue from its mid-point (the standard mid-year
         convention -- the period's profit emerges over the period). This
-        approximately reconciles to :func:`nbv`; the exact new-business value is
-        the NBV (``CSM + RA``), not this aggregated-and-re-discounted stream."""
+        approximately reconciles to :func:`csm_plus_ra`; the exact figure is
+        ``csm_plus_ra`` (CSM + RA), not this aggregated-and-re-discounted stream."""
         mid = (np.asarray(self.month_end, np.float64)
                - 0.5 * self.period_months) / 12.0
         return float(np.sum(self.profit / (1.0 + annual_rate) ** mid))
 
 
-def nbv(measurement) -> FloatArray:
-    """New business value per model point -- the present value at issue of the
-    profit the contract is expected to release: ``CSM + RA - loss component``
-    (equivalently ``-BEL``). Pre-tax and pre-required-capital."""
+def csm_plus_ra(measurement) -> FloatArray:
+    """CSM + RA per model point -- the present value at issue of the profit the
+    contract is expected to release: ``CSM + RA - loss component`` (equivalently
+    ``-BEL``). Pre-tax and pre-required-capital. NOT the MCEV value of new
+    business (:func:`~fastcashflow.pricing.vnb`), which nets the cost of capital."""
     return measurement.csm + measurement.ra - measurement.loss_component
 
 
@@ -78,11 +84,11 @@ def _pv_premium(measurement) -> FloatArray:
 
 
 def profit_margin(measurement) -> FloatArray:
-    """Profit margin per model point -- new business value over the present value
+    """Profit margin per model point -- ``csm_plus_ra`` over the present value
     of premiums (the PVNBP margin). Zero-premium contracts return 0."""
     pvp = _pv_premium(measurement)
     safe = np.where(pvp != 0.0, pvp, 1.0)
-    return np.where(pvp != 0.0, nbv(measurement) / safe, 0.0)
+    return np.where(pvp != 0.0, csm_plus_ra(measurement) / safe, 0.0)
 
 
 def signature(measurement, period_months: int = 12) -> ProfitSignature:
@@ -90,8 +96,8 @@ def signature(measurement, period_months: int = 12) -> ProfitSignature:
     (CSM release + RA release on a best-estimate run), summed over the book.
 
     Built from :func:`~fastcashflow.reporting.report`; the present value of the signature
-    at the locked-in rate approximately reconciles to the portfolio :func:`nbv`
-    total (the exact new-business value is the NBV; the annual signature is an
+    at the locked-in rate approximately reconciles to the portfolio :func:`csm_plus_ra`
+    total (the exact figure is ``csm_plus_ra``; the annual signature is an
     aggregated presentation that re-discounts a year's profit from its mid-point).
     """
     rep = _report(measurement)
@@ -149,5 +155,5 @@ def break_even_year(cashflows: FloatArray, *, period_months: int = 12) -> int:
     return int(hit[0] + 1) if hit.size else -1
 
 
-__all__ = ["ProfitSignature", "nbv", "profit_margin", "signature", "irr",
+__all__ = ["ProfitSignature", "csm_plus_ra", "profit_margin", "signature", "irr",
            "break_even_year"]

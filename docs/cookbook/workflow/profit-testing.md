@@ -3,10 +3,10 @@
 :::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- 측정 결과(BEL / RA / CSM)에서 **신계약가치 (NBV)** 와 **수익성 마진** 을 뽑는 법
-  (`pricing.nbv`, `pricing.profit_margin`)
+- 측정 결과(BEL / RA / CSM)에서 **CSM+RA** (발행시점 미실현이익+위험조정) 와 **수익성 마진** 을 뽑는 법
+  (`pricing.csm_plus_ra`, `pricing.profit_margin`)
 - **IFRS 17 이익 시그니처** (연도별 보험서비스결과의 emergence) 와, 그 현재가치가
-  NBV 로 환원되는 관계 (`pricing.signature`)
+  CSM+RA 로 환원되는 관계 (`pricing.signature`)
 - **전통형 (통계기초) profit-test** — commutation (Dx / Nx / Mx) 없이 투영으로
   **순보험료식 (NLP) 준비금** 을 만들고 (`pricing.statutory_reserve`), 준비금이
   **자기조달** 임을 확인한 뒤 보험료 로딩 / 금리 스프레드가 이익으로 떠오르는 것을
@@ -22,7 +22,7 @@ profit-testing** 관점 — "이 계약이 회사에 얼마의 이익을, 언제
 
 두 가지 관점을 모두 봅니다:
 
-- **IFRS 17 관점** — 신계약가치는 곧 음의 BEL (`CSM + RA`), 이익 시그니처는
+- **IFRS 17 관점** — CSM+RA 는 곧 음의 BEL, 이익 시그니처는
   CSM / RA 의 기간별 인식.
 - **전통형 (통계) 관점** — 순보험료식 준비금을 기준으로 한 전통적 이익원천 분석
   (보험료차 / 이자차). 한국 실무의 profit-test 가 이쪽입니다.
@@ -35,11 +35,11 @@ profit-testing** 관점 — "이 계약이 회사에 얼마의 이익을, 언제
 
 * - 지표
   - 측정 결과에서의 정의
-* - `nbv(m)`
-  - 신계약가치 = `CSM + RA - loss_component` = `-BEL`. 발행시점에 계약이 풀어낼
+* - `csm_plus_ra(m)`
+  - CSM+RA = `CSM + RA - loss_component` = `-BEL`. 발행시점에 계약이 풀어낼
     이익의 현재가치 (세전 · 필요자본비용 차감 전).
 * - `profit_margin(m)`
-  - `NBV / PV(보험료)` (PVNBP 마진). full 측정 필요 (보험료 현금흐름).
+  - `CSM+RA / PV(보험료)` (PVNBP 마진). full 측정 필요 (보험료 현금흐름).
 * - `signature(m, period_months)`
   - IFRS 17 이익 시그니처 — 기간별 보험서비스결과 (`report` 재사용).
 * - `statutory_reserve(mp, stat)`
@@ -50,10 +50,10 @@ profit-testing** 관점 — "이 계약이 회사에 얼마의 이익을, 언제
   - 주주 현금흐름 (신계약비 strain + 이익)의 내부수익률 / 회수기간.
 :::
 
-## 최소 작동 예제 1 — NBV 와 마진 (IFRS 17)
+## 최소 작동 예제 1 — CSM+RA 와 마진 (IFRS 17)
 
 `solve_premium` (기존 보험료 해) 로 **CSM 마진 10%** 가 되게 보험료를 풀고, 같은
-계약의 NBV 와 `profit_margin` 을 봅니다.
+계약의 CSM+RA 와 `profit_margin` 을 봅니다.
 
 ```python
 import numpy as np
@@ -74,7 +74,7 @@ mp = replace(mp0, premium=np.full(1, gross))
 m  = fcf.gmm.measure(mp, basis)
 
 print(f"priced premium = {gross:,.2f}")
-print(f"NBV            = {pricing.nbv(m)[0]:,.0f}")
+print(f"CSM+RA         = {pricing.csm_plus_ra(m)[0]:,.0f}")
 print(f"  = CSM {m.csm[0]:,.0f} + RA {m.ra[0]:,.0f} - loss {m.loss_component[0]:,.0f}")
 print(f"profit margin  = {pricing.profit_margin(m)[0]:.4f}")
 ```
@@ -83,28 +83,28 @@ print(f"profit margin  = {pricing.profit_margin(m)[0]:.4f}")
 
 ```text
 priced premium = 99,171.57
-NBV            = 1,230,855
+CSM+RA         = 1,230,855
   = CSM 784,642 + RA 446,213 - loss 0
 profit margin  = 0.1569
 ```
 
 `solve_premium` 의 마진 목표는 **CSM 기준** (`CSM / PV(보험료) = 0.10`) 인데,
-`profit_margin` 은 **NBV 기준** (`(CSM + RA) / PV(보험료)`) 이라 15.69% 로 더
+`profit_margin` 은 **CSM+RA 기준** (`(CSM + RA) / PV(보험료)`) 이라 15.69% 로 더
 넓습니다. 차이 5.69%p 가 곧 **RA** — 위험이 풀리면서 함께 이익으로 인식될
-부분입니다. NBV 는 CSM 과 RA 를 모두 발행시점 이익으로 보는 더 넓은 신계약가치
-지표입니다.
+부분입니다. CSM+RA 는 CSM 과 RA 를 모두 발행시점 이익으로 보는 지표입니다 --
+MCEV 의 신계약가치(VNB)와 달리 필요자본비용 차감 전입니다.
 
 ## 최소 작동 예제 2 — IFRS 17 이익 시그니처
 
 같은 계약의 **연도별 이익 emergence** 입니다. 시그니처를 발행시점으로 할인하면
-NBV 로 환원됩니다.
+CSM+RA 로 환원됩니다.
 
 ```python
 sig = pricing.signature(m, period_months=12)
 print(f"{'year':>4}{'profit':>14}")
 for yr, p in zip(sig.month_end // 12, sig.profit):
     print(f"{yr:>4}{p:>14,.0f}")
-print(f"PV @3% = {sig.present_value(0.03):,.0f}   NBV total = {pricing.nbv(m).sum():,.0f}")
+print(f"PV @3% = {sig.present_value(0.03):,.0f}   CSM+RA total = {pricing.csm_plus_ra(m).sum():,.0f}")
 ```
 
 출력:
@@ -121,12 +121,12 @@ year        profit
    8       125,652
    9       120,512
   10       115,605
-PV @3% = 1,231,100   NBV total = 1,230,855
+PV @3% = 1,231,100   CSM+RA total = 1,230,855
 ```
 
 이익은 CSM / RA 가 해마다 풀리며 인식되어 **매년 감소** 합니다 (인포스가 줄어드니까).
-시그니처의 현재가치 1,231,100 이 NBV 1,230,855 와 일치 (0.02% 이내) — 시그니처는
-같은 신계약가치를 연도별로 펼친 표현일 뿐입니다.
+시그니처의 현재가치 1,231,100 이 CSM+RA 1,230,855 와 일치 (0.02% 이내) — 시그니처는
+같은 CSM+RA 를 연도별로 펼친 표현일 뿐입니다.
 
 ## 최소 작동 예제 3 — 전통형 (통계) profit-test
 
@@ -219,22 +219,22 @@ break-even year = 6
 
 ## 변형
 
-- **마진 / IRR / NBV 목표로 보험료 풀기** — `solve_premium(..., margin=)` /
+- **마진 / IRR / CSM+RA 목표로 보험료 풀기** — `solve_premium(..., margin=)` /
   `csm=` 로 목표를 정해 보험료를 역산하고, 이 챕터의 지표로 확인하는 왕복.
 - **금리 스프레드** — `statutory_profit_signature(..., earned_rate=0.04)` 로
   평가이율(2.5%) 위로 운용수익(4%)을 가정하면 이자차가 추가 이익으로 emergence.
 - **월 단위 시그니처** — `signature(m, period_months=1)` / 통계 시그니처도 동일
   인자로 월별 emergence.
-- **포트폴리오** — 모든 지표가 모델포인트 축으로 벡터화 (`nbv` 는 `(n_mp,)`),
+- **포트폴리오** — 모든 지표가 모델포인트 축으로 벡터화 (`csm_plus_ra` 는 `(n_mp,)`),
   시그니처는 포트폴리오 전체 합산.
 
 ## 함정 / 검증
 
 - **`profit_margin` 은 full 측정 필요** — 보험료 현금흐름을 쓰므로
-  `measure(full=False)` 면 명시적 에러. `nbv` 는 headline 만 쓰므로 fast path 에서도
+  `measure(full=False)` 면 명시적 에러. `csm_plus_ra` 는 headline 만 쓰므로 fast path 에서도
   됩니다.
-- **CSM 마진 != NBV 마진** — `solve_premium` 의 `margin` 은 CSM 기준,
-  `profit_margin` 은 NBV(CSM+RA) 기준. RA 만큼 후자가 넓습니다 (예제 1).
+- **CSM 마진 != CSM+RA 마진** — `solve_premium` 의 `margin` 은 CSM 기준,
+  `profit_margin` 은 CSM+RA 기준. RA 만큼 후자가 넓습니다 (예제 1).
 - **IRR 은 부호변화 필요** — IFRS 17 시그니처는 전부 양수라 IRR 이 없습니다
   (`ValueError`). 신계약비 strain 을 붙여 부호를 바꿔야 의미가 생깁니다.
 - **통계 profit-test v1 가정** — pricing 기초와 통계기초가 **decrement (사망 / 해지)

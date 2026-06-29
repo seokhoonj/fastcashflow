@@ -236,7 +236,7 @@
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
 * - 8.3
   - [수익성 분석 / profit-testing](workflow/profit-testing)
-  - 측정 결과에서 NBV / 마진 / 이익 시그니처 / IRR 추출. 전통형 (통계) NLP 준비금과
+  - 측정 결과에서 CSM+RA / 마진 / 이익 시그니처 / IRR 추출. 전통형 (통계) NLP 준비금과
     이익원천 (보험료차 / 이자차) emergence — `fcf.pricing`.
 * - 8.4
   - [전통형 금리보증 비용 (TVOG)](workflow/interest-guarantee)
@@ -245,7 +245,7 @@
 * - 8.5
   - [임베디드밸류 / 신계약가치](workflow/embedded-value)
   - `VNB = PVFP - CoC - TVOG`. 이익 시그니처에서 요구자본 보유비용과 보증 시간가치를
-    차감한 신계약가치 -- `embedded_value`.
+    차감한 신계약가치 (VNB) -- `vnb`.
 * - 8.6
   - [요구자본 (Solvency II / K-ICS)](workflow/required-capital)
   - 충격 -> 재측정 -> 상관집계로 위험기반 요구자본 (SCR). 같은 엔진에 제도만 바꿔
