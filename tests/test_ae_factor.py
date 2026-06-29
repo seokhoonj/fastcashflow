@@ -31,33 +31,33 @@ def _build(path: Path, *, ae_rows=None):
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 0.75, 0.10, 0.10])
 
-    rd = wb.create_sheet("coverages")
-    rd.append(["coverage", "rate_table"])
-    rd.append(["INPATIENT", "HOSP"])
+    cov = wb.create_sheet("coverages")
+    cov.append(["coverage", "rate_table"])
+    cov.append(["INPATIENT", "HOSP"])
 
-    mt = wb.create_sheet("mortality_tables")
-    mt.append(["table_id", "sex", "age", "rate"])
+    mort = wb.create_sheet("mortality_tables")
+    mort.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):
-            mt.append(["MORT", sex, age, 0.001])
+            mort.append(["MORT", sex, age, 0.001])
 
-    rr = wb.create_sheet("incidence_rate_tables")
-    rr.append(["table_id", "sex", "age", "rate"])
+    inc = wb.create_sheet("incidence_rate_tables")
+    inc.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):
-            rr.append(["HOSP", sex, age, 0.02])
+            inc.append(["HOSP", sex, age, 0.02])
 
-    lp = wb.create_sheet("lapse_tables")
-    lp.append(["table_id", "duration", "rate"])
-    lp.append(["LAPSE", 0, 0.05])
+    lapse = wb.create_sheet("lapse_tables")
+    lapse.append(["table_id", "duration", "rate"])
+    lapse.append(["LAPSE", 0, 0.05])
 
-    dt = wb.create_sheet("discount_tables")
-    dt.append(["table_id", "year", "rate"])
-    dt.append(["DISC", 0, 0.03])
+    disc = wb.create_sheet("discount_tables")
+    disc.append(["table_id", "year", "rate"])
+    disc.append(["DISC", 0, 0.03])
 
-    inf = wb.create_sheet("inflation_tables")
-    inf.append(["table_id", "year", "rate"])
-    inf.append(["INFL", 0, 0.02])
+    infl = wb.create_sheet("inflation_tables")
+    infl.append(["table_id", "year", "rate"])
+    infl.append(["INFL", 0, 0.02])
 
     if ae_rows is not None:
         ae = wb.create_sheet("ae_factors")
@@ -164,27 +164,27 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
                 "morbidity_cv", "morbidity_age_shift"])
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 0.75, 0.10, 0.10, 5])
-    rd = wb.create_sheet("coverages")
-    rd.append(["coverage", "rate_table"])
-    rd.append(["INPATIENT", "HOSP"])
-    mt = wb.create_sheet("mortality_tables")
-    mt.append(["table_id", "sex", "age", "rate"])
+    cov = wb.create_sheet("coverages")
+    cov.append(["coverage", "rate_table"])
+    cov.append(["INPATIENT", "HOSP"])
+    mort = wb.create_sheet("mortality_tables")
+    mort.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):
-            mt.append(["MORT", sex, age, 0.001])
-    rr = wb.create_sheet("incidence_rate_tables")
-    rr.append(["table_id", "sex", "age", "rate"])
+            mort.append(["MORT", sex, age, 0.001])
+    inc = wb.create_sheet("incidence_rate_tables")
+    inc.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):
-            rr.append(["HOSP", sex, age, 0.001 * (age - 20 + 1)])   # 0.001, 0.002, ...
+            inc.append(["HOSP", sex, age, 0.001 * (age - 20 + 1)])   # 0.001, 0.002, ...
     for sn, header, row in [
         ("lapse_tables", ["table_id", "duration", "rate"], ["LAPSE", 0, 0.05]),
         ("discount_tables", ["table_id", "year", "rate"], ["DISC", 0, 0.03]),
         ("inflation_tables", ["table_id", "year", "rate"], ["INFL", 0, 0.02]),
     ]:
-        s_ws = wb.create_sheet(sn)
-        s_ws.append(header)
-        s_ws.append(row)
+        ws = wb.create_sheet(sn)
+        ws.append(header)
+        ws.append(row)
     ae = wb.create_sheet("ae_factors")
     ae.append(["product", "channel", "coverage", "factor"])
     ae.append(["TERM_A", "GA", "INPATIENT", 0.5])

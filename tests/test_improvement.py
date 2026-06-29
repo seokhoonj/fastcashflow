@@ -33,31 +33,31 @@ def _build(path: Path, *, improvement_curve=None):
     seg.append(cols)
     seg.append(row)
 
-    rd = wb.create_sheet("coverages")
-    rd.append(["coverage", "rate_table"])
+    cov = wb.create_sheet("coverages")
+    cov.append(["coverage", "rate_table"])
     # No rate-driven coverages registered -- this segment has no claim
     # benefits; mortality_table only drives the in-force decrement.
 
-    mt = wb.create_sheet("mortality_tables")
-    mt.append(["table_id", "sex", "age", "rate"])
+    mort = wb.create_sheet("mortality_tables")
+    mort.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):
-            mt.append(["MORT", sex, age, 0.001])
+            mort.append(["MORT", sex, age, 0.001])
 
     for sn, header, value_row in [
         ("lapse_tables", ["table_id", "duration", "rate"], ["LAPSE", 0, 0.05]),
         ("discount_tables", ["table_id", "year", "rate"], ["DISC", 0, 0.03]),
         ("inflation_tables", ["table_id", "year", "rate"], ["INFL", 0, 0.02]),
     ]:
-        s = wb.create_sheet(sn)
-        s.append(header)
-        s.append(value_row)
+        ws = wb.create_sheet(sn)
+        ws.append(header)
+        ws.append(value_row)
 
     if improvement_curve is not None:
-        imp = wb.create_sheet("improvement_tables")
-        imp.append(["table_id", "year", "factor"])
+        impr = wb.create_sheet("improvement_tables")
+        impr.append(["table_id", "year", "factor"])
         for year, factor in enumerate(improvement_curve):
-            imp.append(["IMPR", year, factor])
+            impr.append(["IMPR", year, factor])
 
     wb.save(path)
 
