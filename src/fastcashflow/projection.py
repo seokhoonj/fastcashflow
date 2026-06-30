@@ -462,7 +462,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         # account-referencing coverage). The roll is a single policy's account;
         # in-force weighting enters at the fund / benefit aggregation, not here.
         # Within-month order is verbatim from the standalone UL kernel:
-        #   a += prem_to_av; risk = max(0, face - a); coi = coi_rate * risk;
+        #   a += prem_to_av; coi_nar = max(0, face - a); coi = coi_rate * coi_nar;
         #   a -= admin_fee + coi; if a < 0: a = 0;
         #   av_mid = a*(1+cr)^0.5; a = a*(1+cr).
         roll_av = has_account and mp_account[mp]
@@ -501,10 +501,10 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             roll_end = A_annz if annuitizing else boundary
             for t in range(roll_end):
                 a_av += account_prem_to_av[mp, t]
-                risk = face_av - a_av
-                if risk < 0.0:
-                    risk = 0.0
-                c_av = account_coi_rate[mp, t] * risk
+                coi_nar = face_av - a_av   # net amount at risk (face above the account)
+                if coi_nar < 0.0:
+                    coi_nar = 0.0
+                c_av = account_coi_rate[mp, t] * coi_nar
                 coi_av[mp, t] = c_av
                 prem_to_av_out[mp, t] = account_prem_to_av[mp, t]
                 admin_out[mp, t] = account_admin_fee[t]
