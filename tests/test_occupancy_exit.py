@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 
@@ -34,7 +34,7 @@ def _model(*, after=0, to=None, cap=0, lump=False, benefit=True,
     if after:
         disabled_trs.append(Transition(after_sojourn_months=after, to=to,
                                        pays_lump_sum=lump))
-    return StateModel(states=(
+    return Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("disabled", pays_periodic_benefit=benefit,
@@ -186,13 +186,13 @@ def test_fast_path_auto_routes_deterministic_transition():
 
 
 def test_markov_compile_rejects_deterministic_transition():
-    from fastcashflow.state_model import compile_state_model
+    from fastcashflow.multistate import compile_model
     # force a Markov compile path on a model carrying a deterministic transition
     # by bypassing the auto-derive (which would make it semi-Markov)
-    model = StateModel(states=(
+    model = Model(states=(
         State("a", pays_premium=True, transitions=(Transition("mortality"),)),
     ), seating=(0,))
     object.__setattr__(model.states[0], "transitions",
                        (Transition("mortality"), Transition(after_sojourn_months=3, to=None)))
     with pytest.raises(ValueError, match="semi-Markov only"):
-        compile_state_model(model, {"mortality": np.zeros((1, 1)), "lapse": np.zeros((1, 1))})
+        compile_model(model, {"mortality": np.zeros((1, 1)), "lapse": np.zeros((1, 1))})

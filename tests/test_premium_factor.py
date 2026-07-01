@@ -14,7 +14,7 @@ from numba import cuda
 
 import fastcashflow as fcf
 from fastcashflow.basis import Basis, CoverageRate
-from fastcashflow.state_model import StateModel, State, Transition
+from fastcashflow.multistate import Model, State, Transition
 
 CM = {"DEATH": fcf.CalculationMethod.DEATH}
 _MORT = lambda s, a, d: np.full(np.shape(a), 0.01)
@@ -79,7 +79,7 @@ def test_premium_factor_full_matches_fast_markov():
 # adversaries flagged as the highest-risk missed edit)
 # ---------------------------------------------------------------------------
 def _reincidence_model(sojourn_tracking_months=12):
-    return StateModel(states=(
+    return Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_incidence", to="post_first"),

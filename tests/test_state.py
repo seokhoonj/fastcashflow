@@ -13,7 +13,8 @@ an independent check on the compiled kernels.
 """
 import numpy as np
 
-from fastcashflow import STATE_ACTIVE, STATE_MODELS, STATE_PAIDUP, STATE_WAIVER, Basis, CalculationMethod, ModelPoints, CoverageRate, read_model_points
+from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, Basis, CalculationMethod, ModelPoints, CoverageRate, read_model_points
+from fastcashflow.multistate import Model
 from fastcashflow.gmm import measure
 
 from conftest import annual_from_monthly as _annual, mp_to_frames
@@ -50,7 +51,7 @@ def _basis(waiver_rate: float = 0.0, **overrides) -> Basis:
     )
     if waiver is not None:
         # Set state_model explicitly to silence the implicit-fallback warning.
-        base["state_model"] = STATE_MODELS["WAIVER"]
+        base["state_model"] = Model.from_preset("ACTIVE_WAIVER")
     base.update(overrides)
     return Basis(**base)
 

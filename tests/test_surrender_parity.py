@@ -5,14 +5,13 @@ mechanism landed; the fused fast path ``measure(full=False)`` must match. This f
 pins the invariant that the two paths return the same BEL when a
 ``surrender_value_curve`` is set, across all CPU kernels:
 
-* scalar fast path (no StateModel, no waiver),
-* Markov codegen (WAIVER_MODEL),
+* scalar fast path (no Model, no waiver),
+* Markov codegen (ACTIVE_WAIVER_MODEL),
 * semi-Markov codegen (sojourn-aware cohort tracking).
 """
 import numpy as np
 
-from fastcashflow import (Basis, CalculationMethod, ExpenseItem, ModelPoints,
-                          STATE_MODELS, CoverageRate)
+from fastcashflow import Basis, CalculationMethod, ExpenseItem, ModelPoints, CoverageRate
 from fastcashflow.gmm import measure
 
 
@@ -50,7 +49,7 @@ def _mp():
 
 
 def test_value_scalar_matches_measure_with_surrender():
-    """Scalar fast path -- no StateModel, no waiver. measure() must agree
+    """Scalar fast path -- no Model, no waiver. measure() must agree
     with measure() to floating-point tolerance once surrender is on."""
     n_time = 240
     # A non-trivial monotone surrender curve: 0 in years 1-2 (typical
@@ -108,13 +107,13 @@ def test_surrender_scales_linearly_in_count():
 
 
 def test_value_state_model_matches_measure_with_surrender():
-    """Markov codegen path (WAIVER_MODEL) -- measure() must agree with
+    """Markov codegen path (ACTIVE_WAIVER_MODEL) -- measure() must agree with
     measure() once surrender is on."""
     n_time = 240
     curve = np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0)
     basis = _basis(
         surrender_value_curve=curve,
-        state_model=STATE_MODELS["WAIVER"],
+        state_model=Model.from_preset("ACTIVE_WAIVER"),
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp()
@@ -152,7 +151,7 @@ def test_value_state_model_matches_measure_amount_per_policy():
     basis = _basis(
         surrender_value_curve=_amount_curve(n_time),
         surrender_value_basis="amount_per_policy",
-        state_model=STATE_MODELS["WAIVER"],
+        state_model=Model.from_preset("ACTIVE_WAIVER"),
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp()
@@ -196,7 +195,7 @@ def test_value_state_model_matches_measure_amount_per_unit():
     basis = _basis(
         surrender_value_curve=curve,
         surrender_value_basis="amount_per_unit",
-        state_model=STATE_MODELS["WAIVER"],
+        state_model=Model.from_preset("ACTIVE_WAIVER"),
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp_with_base(n_time, 100_000.0)
@@ -210,7 +209,7 @@ def test_value_state_model_matches_measure_amount_per_unit():
 # total in-force. A paid-up state lapses at lapse_paidup; a non-lapsing state
 # (WAIVER) is never surrendered.
 # ---------------------------------------------------------------------------
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 from fastcashflow.basis import annual_to_monthly
 
 
@@ -218,7 +217,7 @@ def test_paidup_surrender_uses_lapse_paidup_not_global_lapse():
     """A paid-up cohort surrenders at lapse_paidup. The pre-fix kernel applied
     the global lapse_annual to the total in-force -- a 10x overstatement here."""
     zero = lambda s, a, d: np.full(np.shape(a), 0.0)
-    paidup = StateModel(states=(
+    paidup = Model(states=(
         State("paidup", pays_premium=False, transitions=(
             Transition("mortality"), Transition("lapse_paidup"))),
     ), seating=(0,))
@@ -256,7 +255,7 @@ def test_waiver_state_is_not_surrendered():
         waiver_incidence_annual = lambda s, a, d: np.full(np.shape(a), 0.30),  # heavy -> waiver
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         surrender_value_curve=np.full(n, V), surrender_value_basis="amount_per_policy",
-        state_model=STATE_MODELS["WAIVER"], coverages=(CoverageRate("DEATH", zero),))
+        state_model=Model.from_preset("ACTIVE_WAIVER"), coverages=(CoverageRate("DEATH", zero),))
     mp = ModelPoints(
         issue_age=np.array([40], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
         premium=np.array([1000.0]), term_months=np.array([n], dtype=np.int64),

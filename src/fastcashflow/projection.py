@@ -48,12 +48,12 @@ from fastcashflow.coverage import (
 )
 from fastcashflow.curves import inflation_index
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.state_model import (
-    compile_state_model,
-    compile_state_model_with_duration,
+from fastcashflow.multistate import (
+    compile_model,
+    compile_model_with_duration,
     is_semi_markov,
     model_references_rate,
-    resolve_state_model,
+    resolve_model,
 )
 
 # Public surface of the ``fastcashflow.projection`` namespace: the raw
@@ -1371,9 +1371,9 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             "a settlement_pattern is not supported on a universal-life account "
             "book (the account benefit settles at exit, not over a pattern).")
 
-    # In-force state machine -- see ``state_model.resolve_state_model`` for
+    # In-force state machine -- see ``multistate.resolve_model`` for
     # the fallback policy when ``basis.state_model`` is unset.
-    state_model = resolve_state_model(basis)
+    state_model = resolve_model(basis)
     seating = np.asarray(state_model.seating, np.int64)
     if model_points.state.size and int(model_points.state.max()) >= seating.shape[0]:
         raise ValueError(
@@ -1480,7 +1480,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                     annual_to_monthly(
                         basis.disability_recovery_annual(
                             sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
-        compiled = compile_state_model_with_duration(state_model, rate_dict)
+        compiled = compile_model_with_duration(state_model, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to
         edge_prob = compiled.edge_prob
@@ -1490,7 +1490,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         benefit_state = compiled.benefit_state
         state_duration_max = compiled.state_duration_max
         periodic_benefit_term_months = compiled.periodic_benefit_term_months
-        # compile_state_model_with_duration returns ``edge_prob`` shape
+        # compile_model_with_duration returns ``edge_prob`` shape
         # ``(n_edges, n_mp, n_year, max_D)`` -- already in the layout the
         # detailed kernel reads (edge axis outer, cohort axis inner).
         state_offset = np.zeros(n_states + 1, dtype=np.int64)
@@ -1588,7 +1588,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 if lapse_scale is not None:
                     waiver_lapse = waiver_lapse * lapse_scale
             rate_dict["lapse_waiver"] = np.ascontiguousarray(waiver_lapse)
-        compiled = compile_state_model(state_model, rate_dict)
+        compiled = compile_model(state_model, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to
         edge_prob = compiled.edge_prob

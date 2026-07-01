@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 
@@ -19,7 +19,7 @@ _ZERO = _FLAT(0.0)
 
 def _two_state(post_rate_name):
     """healthy(0) + post(1); post routes its mortality to ``post_rate_name``."""
-    return StateModel(states=(
+    return Model(states=(
         State("healthy", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),),
@@ -119,7 +119,7 @@ def test_deaths_reporter_is_state_aware():
 # ---------------------------------------------------------------------------
 def test_state_mortality_and_benefit_cap_compose():
     # disabled state: elevated mortality 0.20 AND a 3-month benefit cap.
-    model = StateModel(states=(
+    model = Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,

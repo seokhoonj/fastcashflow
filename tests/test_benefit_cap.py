@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 
@@ -19,7 +19,7 @@ _ZERO = lambda s, a, d: np.full(np.shape(a), 0.0)   # no death / lapse
 def _capped_model(cap):
     """active + disabled (benefit) with a sojourn cap; no decrements, so a
     life seated in ``disabled`` stays there and only the cap stops payment."""
-    return StateModel(states=(
+    return Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=cap,

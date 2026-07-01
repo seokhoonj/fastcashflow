@@ -25,8 +25,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow.basis import BasisRouter
-from fastcashflow import State, Transition, StateModel
-from fastcashflow.state_model import STATE_MODELS
+from fastcashflow.multistate import State, Transition, Model
 
 CM = fcf.CalculationMethod
 
@@ -41,12 +40,12 @@ _ci2       = lambda s, a, d, sd: np.where(sd < 2, 0.0, 0.20)  # reincidence, wai
 _di_rec    = lambda s, a, d, sd: np.where(sd < 12, 0.45, 0.10)  # recovery, sojourn
 
 # --- one state model per mechanic --------------------------------------------
-_M_DEATH = StateModel(states=(
+_M_DEATH = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0,))
 
-_M_DI = StateModel(states=(
+_M_DI = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("mortality"),
         Transition("waiver_incidence", to="disabled"),
@@ -56,7 +55,7 @@ _M_DI = StateModel(states=(
         Transition("disability_recovery", to="active", sojourn_dependent=True))),
 ), seating=(0, 1))
 
-_M_LTC = StateModel(states=(
+_M_LTC = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
         Transition("waiver_incidence", to="care", pays_lump_sum=True))),
@@ -65,7 +64,7 @@ _M_LTC = StateModel(states=(
           Transition("mortality"),)),
 ), seating=(0, 1))
 
-_M_REINCID = StateModel(states=(
+_M_REINCID = Model(states=(
     State("healthy", pays_premium=True, transitions=(
         Transition("mortality"),
         Transition("ci_incidence", to="post_first", pays_lump_sum=True),
@@ -97,7 +96,7 @@ def _bases():
         "MORB_A":    _basis(state_model=_M_DEATH,
                             coverages=(fcf.CoverageRate("CANCER_INPATIENT", _cancer),)),
         "ANN_A":     _basis(state_model=_M_DEATH),
-        "WAIVER_A":  _basis(state_model=STATE_MODELS["WAIVER"],
+        "WAIVER_A":  _basis(state_model=Model.from_preset("ACTIVE_WAIVER"),
                             waiver_incidence_annual=_inc),
         "REINCID_A": _basis(state_model=_M_REINCID,
                             ci_incidence_annual=_ci1, ci_reincidence_annual=_ci2),

@@ -275,24 +275,24 @@ coverage rate는 `morbidity_age_shift` 한 값을 공유함. 컬럼이 없거나
 no-op.
 
 **Optional `state_model` 컬럼** (문자열, 기본 None):
-세그먼트가 어떤 상태기계 (StateModel) 를 쓰는지 enum 으로 선택.
-`fastcashflow.STATE_MODELS` 사전의 키 (문자열) 를 값으로 넣음.
+세그먼트가 어떤 상태기계 (Model) 를 쓰는지 enum 으로 선택.
+`Model.from_preset` 사전의 키 (문자열) 를 값으로 넣음.
 
 | 값 | 의미 |
 |---|---|
-| (빈 셀) | `Basis.state_model = None`. 다중 상태 mechanic 이 트리거되면 (납입면제 / 모델포인트의 state 컬럼 비-0) 자동으로 `WAIVER_MODEL` 사용 |
-| `WAIVER` | 2-state Markov (ACTIVE / WAIVER). 가장 흔한 한국 protection 상품 형태 |
-| `WAIVER_PAIDUP` | 3-state (ACTIVE / WAIVER / PAIDUP). 완납(paid-up) 상태가 있는 보유계약 평가 ([3.2](cookbook/markov/paid-up)) |
+| (빈 셀) | `Basis.state_model = None`. 다중 상태 mechanic 이 트리거되면 (납입면제 / 모델포인트의 state 컬럼 비-0) 자동으로 `ACTIVE_WAIVER_MODEL` 사용 |
+| `ACTIVE_WAIVER` | 2-state Markov (ACTIVE / WAIVER). 가장 흔한 한국 protection 상품 형태 |
+| `ACTIVE_WAIVER_PAIDUP` | 3-state (ACTIVE / WAIVER / PAIDUP). 완납(paid-up) 상태가 있는 보유계약 평가 ([3.2](cookbook/markov/paid-up)) |
 
 향후 라이브러리 버전업에서 추가 등록 가능 (`CANCER_REINCIDENCE`,
 `DISABILITY`, `LTC_GRADES` 등). 등록되지 않은 키를 적으면 read_basis
 가 `ValueError` 와 등록된 키 목록을 함께 반환.
 
 자유 형태 (사전에 없는 topology) 가 필요하면 Excel 대신 Python 으로
-`StateModel` 개체를 직접 만들어 `Basis(state_model=...)` 에 주입.
+`Model` 개체를 직접 만들어 `Basis(state_model=...)` 에 주입.
 
-샘플 워크북의 `_DEFAULTS` 행은 `state_model = WAIVER` 로 설정되어 있어
-모든 세그먼트가 명시적으로 WAIVER_MODEL 을 사용.
+샘플 워크북의 `_DEFAULTS` 행은 `state_model = ACTIVE_WAIVER` 로 설정되어 있어
+모든 세그먼트가 명시적으로 ACTIVE_WAIVER_MODEL 을 사용.
 
 예시 (`sample_basis.xlsx` 발췌):
 

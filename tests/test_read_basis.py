@@ -9,6 +9,7 @@ import fastcashflow as fcf
 import numpy as np
 
 from fastcashflow import ModelPoints
+from fastcashflow.multistate import Model
 from fastcashflow.gmm import measure
 
 
@@ -139,19 +140,18 @@ def test_resolved_basis_values():
 
 
 # ---------------------------------------------------------------------------
-# state_model column + STATE_MODELS registry (U+W)
+# state_model column + Model.from_preset registry (U+W)
 # ---------------------------------------------------------------------------
 
 
 def test_state_model_column_resolves_to_registry_entry():
     """The sample workbook's ``_DEFAULTS`` row carries
-    ``state_model = WAIVER`` -- both segments inherit and resolve to
-    ``STATE_MODELS['WAIVER']``.
+    ``state_model = ACTIVE_WAIVER`` -- both segments inherit and resolve to
+    ``Model.from_preset("ACTIVE_WAIVER")``.
     """
-    from fastcashflow import STATE_MODELS
     basis = fcf.samples.basis()
     for basis in basis.segments.values():
-        assert basis.state_model is STATE_MODELS["WAIVER"]
+        assert basis.state_model is Model.from_preset("ACTIVE_WAIVER")
 
 
 def test_state_model_column_blank_keeps_none():

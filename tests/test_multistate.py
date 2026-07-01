@@ -1,17 +1,18 @@
-"""The in-force state machine -- StateModel as product input.
+"""The in-force state machine -- Model as product input.
 
 A product declares its states, transitions and
 premium-paying states as data. The default active / waiver model is one
-StateModel among many; these tests drive custom ones through both the fused
+Model among many; these tests drive custom ones through both the fused
 ``value`` and the detailed ``measure`` path, with the figures derived by hand
 from the multiple-decrement recursion.
 """
 import numpy as np
 import pytest
 
-from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, CoverageRate, CalculationMethod
+from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, Basis, ModelPoints, CoverageRate, CalculationMethod
+from fastcashflow.multistate import State, Model, Transition
 from fastcashflow.gmm import measure
-from fastcashflow.state_model import compile_state_model
+from fastcashflow.multistate import compile_model
 
 from conftest import annual_from_monthly as _annual
 
@@ -43,7 +44,7 @@ def _basis(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Basis:
 
 
 # ---------------------------------------------------------------------------
-# compile_state_model -- the StateModel -> kernel edge arrays compiler
+# compile_model -- the Model -> kernel edge arrays compiler
 # ---------------------------------------------------------------------------
 
 def test_compile_waiver_edges():
@@ -54,7 +55,7 @@ def test_compile_waiver_edges():
         "lapse": np.array([[0.02]]),
         "lapse_waiver": np.array([[0.0]]),   # default: waiver does not lapse
     }
-    compiled = compile_state_model(STATE_MODELS["WAIVER"], rates)
+    compiled = compile_model(Model.from_preset("ACTIVE_WAIVER"), rates)
     assert compiled.n_states == 2
     assert list(compiled.premium_state) == [True, False]
     assert list(compiled.benefit_state) == [False, False]   # waiver: no benefit
@@ -78,18 +79,18 @@ def test_compile_waiver_edges():
 def test_compile_missing_rate_raises():
     """A decrement naming a rate that was not supplied is a clear error."""
     with pytest.raises(ValueError, match="lapse"):
-        compile_state_model(STATE_MODELS["WAIVER"], {"mortality": np.array([[0.01]]),
+        compile_model(Model.from_preset("ACTIVE_WAIVER"), {"mortality": np.array([[0.01]]),
                                            "waiver_incidence": np.array([[0.0]])})
 
 
 # ---------------------------------------------------------------------------
-# StateModel validation
+# Model validation
 # ---------------------------------------------------------------------------
 
 def test_unknown_destination_state_rejected():
     """A decrement to a state that does not exist is rejected at build time."""
     with pytest.raises(ValueError, match="unknown state"):
-        StateModel(states=(
+        Model(states=(
             State("active", pays_premium=True,
                   transitions=(Transition("waiver_incidence", to="ghost"),)),
         ))
@@ -97,31 +98,33 @@ def test_unknown_destination_state_rejected():
 
 def test_duplicate_state_names_rejected():
     with pytest.raises(ValueError, match="unique"):
-        StateModel(states=(State("a"), State("a")))
+        Model(states=(State("a"), State("a")))
 
 
 def test_seating_out_of_range_rejected():
     with pytest.raises(ValueError, match="seating"):
-        StateModel(states=(State("a"),), seating=(0, 1))
+        Model(states=(State("a"),), seating=(0, 1))
 
 
-def test_state_models_registry_is_read_only():
-    """STATE_MODELS is exposed as a read-only mapping -- a stray assignment
-    from user / plugin code cannot silently swap the bundled topology
-    process-wide. Lookup still works the same."""
-    assert STATE_MODELS["WAIVER"] is not None
-    with pytest.raises(TypeError):
-        STATE_MODELS["WAIVER"] = StateModel(states=(State("x"),))    # type: ignore[index]
+def test_from_preset_registry():
+    """The bundled topologies are reached through ``Model.from_preset``; the
+    registry is private, so user / plugin code cannot swap a bundled topology
+    process-wide. ``presets`` lists the keys; an unknown key raises."""
+    assert Model.from_preset("ACTIVE_WAIVER") is not None
+    assert Model.from_preset("ACTIVE_WAIVER_PAIDUP").n_states == 3
+    assert set(Model.presets()) == {"ACTIVE_WAIVER", "ACTIVE_WAIVER_PAIDUP"}
+    with pytest.raises(ValueError, match="unknown state model preset"):
+        Model.from_preset("NOPE")
 
 
 def test_markov_can_reference_ci_incidence_annual():
     """A custom Markov topology that wires a transition to ci_incidence
     works through both measure() and measure(). The Markov rate dict now
     threads ci_incidence_annual when the assumption is set -- before, the
-    same topology would fail at compile_state_model with a "rate not
+    same topology would fail at compile_model with a "rate not
     supplied" ValueError, surprising anyone porting a Markov dx model
     from the semi-Markov branch."""
-    healthy_to_diag = StateModel(
+    healthy_to_diag = Model(
         states=(
             State("healthy", pays_premium=True, transitions=(
                 Transition("mortality"),
@@ -158,9 +161,9 @@ def test_markov_can_reference_ci_incidence_annual():
 # ---------------------------------------------------------------------------
 
 def test_explicit_waiver_model_matches_default():
-    """A StateModel rebuilt to the same shape as the built-in default
-    reproduces it exactly -- the default path is just one StateModel."""
-    rebuilt = StateModel(
+    """A Model rebuilt to the same shape as the built-in default
+    reproduces it exactly -- the default path is just one Model."""
+    rebuilt = Model(
         states=(
             State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
@@ -184,7 +187,7 @@ def test_explicit_waiver_model_matches_default():
 def test_single_state_no_lapse_hand_calculation():
     """A one-state model -- mortality only, no lapse, no waiver. With a flat
     1% mortality the in-force is [1, 0.99, 0.99^2]; every figure by hand."""
-    no_lapse = StateModel(states=(
+    no_lapse = Model(states=(
         State("active", pays_premium=True, transitions=(Transition("mortality"),)),
     ))
     death_benefit = 1_000_000.0
@@ -209,7 +212,7 @@ def test_decrement_order_matters():
     """The decrement order is data: applying lapse before waiver inception
     feeds the waiver state a fraction (1 - lapse) smaller than the default
     waiver-before-lapse order, a different BEL -- derived by hand."""
-    lapse_first = StateModel(
+    lapse_first = Model(
         states=(
             State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
@@ -249,7 +252,7 @@ def test_three_state_model_runs():
     runs through both kernels: n_states = 3 flows through the occupancy
     recursion, and the extra paid-up state -- mortality only, no premium --
     values a paid-up contract exactly as the two-state default does."""
-    three = StateModel(
+    three = Model(
         states=(
             State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
@@ -282,7 +285,7 @@ def test_three_state_model_runs():
 
 
 def test_paidup_state_uses_its_own_lapse():
-    """STATE_MODELS["WAIVER_PAIDUP"] keeps paid-up a distinct state so it can
+    """Model.from_preset("ACTIVE_WAIVER_PAIDUP") keeps paid-up a distinct state so it can
     carry its own lapse (Basis.lapse_paidup_annual). A paid-up-seated
     contract decrements by mortality + the paid-up lapse; with the paid-up
     lapse above the active lapse its in-force falls faster than the active
@@ -295,7 +298,7 @@ def test_paidup_state_uses_its_own_lapse():
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH",
                                 lambda s, a, d: np.full(a.shape, q)),),
-        state_model=STATE_MODELS["WAIVER_PAIDUP"],
+        state_model=Model.from_preset("ACTIVE_WAIVER_PAIDUP"),
     )
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
@@ -313,7 +316,7 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     falls back to lapse_annual -- the WAIVER_PAIDUP model still runs, the
     paid-up state just lapses at the ordinary rate."""
     basis = _basis(q=0.01, lapse=0.05,
-                 state_model=STATE_MODELS["WAIVER_PAIDUP"])
+                 state_model=Model.from_preset("ACTIVE_WAIVER_PAIDUP"))
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
               calculation_methods={"DEATH": CalculationMethod.DEATH})
@@ -323,7 +326,7 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
 
 
 def test_waiver_state_uses_its_own_lapse():
-    """STATE_MODELS["WAIVER"] waiver state can carry its OWN lapse via
+    """Model.from_preset("ACTIVE_WAIVER") waiver state can carry its OWN lapse via
     Basis.lapse_waiver_annual. A waiver-seated contract then decrements by
     mortality + the waiver lapse -- the residual surrender of a premium-waived
     contract (e.g. cashing out the surrender value)."""
@@ -335,7 +338,7 @@ def test_waiver_state_uses_its_own_lapse():
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH",
                                 lambda s, a, d: np.full(a.shape, q)),),
-        state_model=STATE_MODELS["WAIVER"],
+        state_model=Model.from_preset("ACTIVE_WAIVER"),
     )
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
@@ -349,7 +352,7 @@ def test_waiver_lapse_defaults_to_zero():
     """With lapse_waiver_annual unset the waiver state does NOT lapse -- it
     decays by mortality alone (the pure-waiver default, backward-compatible
     with the model before lapse_waiver existed)."""
-    basis = _basis(q=0.01, lapse=0.05, state_model=STATE_MODELS["WAIVER"])
+    basis = _basis(q=0.01, lapse=0.05, state_model=Model.from_preset("ACTIVE_WAIVER"))
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
               calculation_methods={"DEATH": CalculationMethod.DEATH})
@@ -361,7 +364,7 @@ def test_waiver_lapse_defaults_to_zero():
 def test_measure_and_value_agree_under_custom_model():
     """The detailed and the fused path agree across a mixed-state portfolio
     valued on a custom three-state model."""
-    three = StateModel(
+    three = Model(
         states=(
             State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
@@ -413,10 +416,10 @@ def test_deaths_respect_within_month_competing_risk_order():
 
     mq, lq = annual_to_monthly(0.01), annual_to_monthly(0.05)
     # mortality first (every bundled model) -> occ x raw rate
-    first = StateModel(states=(State("active", pays_premium=True, transitions=(
+    first = Model(states=(State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),), seating=(0,))
     # mortality after lapse -> occ x (1 - lapse) x rate (fires on lapse survivors)
-    second = StateModel(states=(State("active", pays_premium=True, transitions=(
+    second = Model(states=(State("active", pays_premium=True, transitions=(
         Transition("lapse"), Transition("mortality"))),), seating=(0,))
 
     assert np.isclose(_project(first).deaths[0, 0], mq)                  # unchanged
@@ -429,7 +432,7 @@ def test_needs_state_machine_predicate():
     state model / waiver decrement / non-active seating is present."""
     from types import SimpleNamespace
     import numpy as np
-    from fastcashflow.state_model import needs_state_machine, STATE_MODELS
+    from fastcashflow.multistate import needs_state_machine
 
     def mp(state):
         return SimpleNamespace(state=np.array(state, dtype=np.int64))
@@ -438,7 +441,7 @@ def test_needs_state_machine_predicate():
         return SimpleNamespace(state_model=state_model, waiver_incidence_annual=waiver)
 
     assert needs_state_machine(mp([0, 0]), basis()) is False           # plain -> scalar
-    assert needs_state_machine(mp([0, 0]), basis(state_model=STATE_MODELS["WAIVER"])) is True
+    assert needs_state_machine(mp([0, 0]), basis(state_model=Model.from_preset("ACTIVE_WAIVER"))) is True
     assert needs_state_machine(mp([0, 0]), basis(waiver=lambda *a: 0.0)) is True
     assert needs_state_machine(mp([0, 1]), basis()) is True            # seated outside active
 
@@ -460,7 +463,7 @@ def _paidup_basis(*, active_lapse, paidup_lapse, waiver_lapse=0.0,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("CA",
                                 lambda s, a, d: np.full(a.shape, _annual(0.002))),),
-        state_model=state_model or STATE_MODELS["WAIVER_PAIDUP"],
+        state_model=state_model or Model.from_preset("ACTIVE_WAIVER_PAIDUP"),
     )
 
 
@@ -533,7 +536,7 @@ def test_premium_term_switch_two_state_uniform_pp_pup():
     """Test 7 (workbook mimic): a plain active -> paid-up model (no waiver) gives
     a single uniform PP-before / PUP-after lapse switch -- the workbook's single
     persistency lapse curve (PP until premium_term, PUP after)."""
-    model = StateModel(states=(
+    model = Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"),
             Transition(at_premium_term=True, to="paidup"))),
@@ -558,7 +561,7 @@ def test_at_premium_term_self_destination_is_noop():
     """A degenerate at_premium_term to the SAME state is a no-op (occupancy
     preserved, decrement stays the source state's) -- not a destruction
     (regression: the move must read a snapshot, not add a state to itself)."""
-    model = StateModel(states=(
+    model = Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"),
             Transition(at_premium_term=True, to="active"))),
@@ -585,7 +588,7 @@ def test_at_premium_term_chain_uses_snapshot_no_cascade():
     premium_term) moves each state's OWN occupancy once: active lands in mid and
     is NOT cascaded on to final the same month. Distinguished by lapse -- mid
     lapses (lapse_paidup), final does not."""
-    model = StateModel(states=(
+    model = Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"),
             Transition(at_premium_term=True, to="mid"))),
@@ -620,7 +623,7 @@ def test_at_premium_term_fused_matches_detailed():
         lapse_waiver_annual=basis.lapse_waiver_annual,
         waiver_incidence_annual=basis.waiver_incidence_annual,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
-        coverages=basis.coverages, state_model=STATE_MODELS["WAIVER_PAIDUP"])
+        coverages=basis.coverages, state_model=Model.from_preset("ACTIVE_WAIVER_PAIDUP"))
     mp = ModelPoints.single(issue_age=40, premium=10_000.0, term_months=60,
                             premium_term_months=24, state=STATE_ACTIVE,
                             benefits={"CA": 1_000_000.0},

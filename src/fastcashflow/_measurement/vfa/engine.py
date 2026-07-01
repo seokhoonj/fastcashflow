@@ -52,7 +52,7 @@ from fastcashflow._numerics import (
 )
 from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.projection import Cashflows, project_cashflows
-from fastcashflow.state_model import resolve_state_model
+from fastcashflow.multistate import resolve_model
 from fastcashflow._measurement.tvog import (
     guarantee_floor_time_value, ul_guarantee_floor_time_value,
     measure_tvog,
@@ -357,7 +357,7 @@ def _project(
     # the occupancy decrement -- it never reads the GMM death-claim factor. A
     # state-conditioned death benefit or occupancy exit would be silently
     # ignored here, so reject it rather than mis-measure the guarantee.
-    state_model = resolve_state_model(basis)
+    state_model = resolve_model(basis)
     if any(s.death_benefit_factor != 1.0 for s in state_model.states):
         raise NotImplementedError(
             "state-conditioned death benefit (State.death_benefit_factor) is "

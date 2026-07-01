@@ -103,7 +103,7 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
 
 `product` 가 `_DEFAULTS` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
 입니다. 견본은 `_DEFAULTS` 에 `MORTALITY_STD` / `DISCOUNT_STD` /
-`state_model=WAIVER` / `ra_confidence=0.75` 등을 두고, 각 segment 행은
+`state_model=ACTIVE_WAIVER` / `ra_confidence=0.75` 등을 두고, 각 segment 행은
 **다른 부분만** 덮어씁니다 — 예컨대 `lapse_table` 과 `expense_table` 은
 상품×채널별로 (`LAPSE_TERM_FC` / `EXPENSE_TERM_FC` 등). 같은 값을 모든 행에
 반복하지 않아도 됩니다.
@@ -180,7 +180,7 @@ CSM sum =   10,280,704
 - `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
   segment 워크북이면 행이 하나뿐이고 사전 키도 하나입니다.
 - `basis.resolve(("TERM_LIFE_A", "FC"))` 가 그 segment 의 `Basis` 개체입니다.
-  `ra_confidence` 0.75 / `state_model` = WAIVER 는 `_DEFAULTS` 행에서,
+  `ra_confidence` 0.75 / `state_model` = ACTIVE_WAIVER 는 `_DEFAULTS` 행에서,
   `lapse_table` = `LAPSE_TERM_FC` 는 segment 행에서 온 값입니다.
 - `discount_annual` 이 길이 101 배열인 것은 견본 `discount_tables` 가 국고채
   현물금리에서 만든 **연도별 할인 곡선** (관찰 + 보간 + LTFR 수렴) 을 담고
@@ -226,6 +226,6 @@ CSM sum =   10,280,704
 - [1.2 담보와 산출방법 매칭](../basics/calculation-methods) —
   `calculation_methods.csv` 의 5 종 산출방법.
 - [7.2 워크북 — 다중 segment / 다종 상품](workbook-multi) — `measure`
-  라우팅과 segment 별 다른 StateModel / lapse.
+  라우팅과 segment 별 다른 Model / lapse.
 - [튜토리얼 11장](../../tutorial/11-in-practice) — 결산 워크플로와 보유계약
   입력 (`read_inforce_policies`).

@@ -29,6 +29,7 @@ from fastcashflow._numerics import (
     _settlement_lic,
 )
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.multistate import TransitionRecord, resolve_model
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
@@ -241,25 +242,8 @@ def _state_reserve(model_points: ModelPoints, proj: Cashflows,
     return reserve, occ
 
 
-@dataclass(frozen=True, slots=True)
-class TransitionRisk:
-    """Descriptor for one transition on the ``sum_at_risk`` axis.
-
-    ``from_state`` / ``to_state`` are transient-state indices; ``to_state`` is
-    ``None`` for an absorbing exit (death / lapse leave the in-force set).
-    ``kind`` is ``"death"``, ``"lapse"`` or ``"transfer"`` (an inter-state edge).
-    ``from_name`` / ``to_name`` label them for display (``to_name`` is the
-    destination state name, or ``"death"`` / ``"lapse"``).
-    """
-    from_state: int
-    to_state: "int | None"
-    kind: str
-    from_name: str
-    to_name: str
-
-
 def _sum_at_risk(model_points: ModelPoints, proj: Cashflows,
-                 reserve: FloatArray, occ: FloatArray):
+                 reserve: FloatArray, occ: FloatArray, model):
     """Per-transition sum at risk ``S^ij + V^j - V^i`` (Markov book, opt-in).
 
     The net exposure if a transition fires: the benefit paid on the edge plus the
@@ -286,7 +270,15 @@ def _sum_at_risk(model_points: ModelPoints, proj: Cashflows,
     Reserves are taken at the same month ``t`` as the source (``V^i(t)``), so
     ``sum_at_risk[t]`` reads "if this transition fires around month ``t``". Death
     / lapse benefits are level in v1; a rule-bearing death coverage is rejected.
-    Returns ``(sum_at_risk (n_mp, n_transition, n_time+1), transitions)``.
+
+    The death / lapse rows and their order come from ``model.transitions`` (the
+    model's declared transition structure), one per state, emitted only where
+    this book actually decrements. The transfer rows are enumerated per compiled
+    inter-state edge (in edge order, after the death / lapse rows) so that a
+    state declaring several transitions to the same destination keeps one row
+    each with its own lump flag, and a calendar ``at_premium_term`` relabel (no
+    compiled edge) carries none. Returns ``(sum_at_risk (n_mp, n_transition,
+    n_time+1), transitions)``.
     """
     st = proj.state_trace
     if st.has_death_coverage_rules:
@@ -294,7 +286,6 @@ def _sum_at_risk(model_points: ModelPoints, proj: Cashflows,
             "sum_at_risk assumes a level death benefit (v1); this book has a "
             "rule-bearing death coverage (waiting / reduction / step / "
             "escalation / term) whose benefit varies in time.")
-    ns = st.n_states
     n_mp, _, n_timep1 = reserve.shape
     n_time = n_timep1 - 1
     occ_t = occ[:, :, :n_time]
@@ -317,22 +308,35 @@ def _sum_at_risk(model_points: ModelPoints, proj: Cashflows,
     lapse_any = st.state_lapse.any(axis=(1, 2))
     names = st.state_names
 
+    # Death / lapse are one absorbing exit per state (no multiplicity), so their
+    # order and descriptors come from the model's declared transition structure;
+    # emit a row only for the states this book actually decrements. Transfers,
+    # by contrast, are per compiled edge: a state may declare several transitions
+    # to the same destination (distinct lump flags) and each is its own row, so
+    # they are enumerated directly from the edge list -- matching it by state
+    # pair would collapse duplicate edges and admit a calendar at_premium_term
+    # transfer (which compiles to no edge).
     sar_rows, transitions = [], []
-    for i in range(ns):                                 # death exits
-        if death_any[i]:
-            sar_rows.append(death_benefit[:, i:i + 1] - reserve[:, i, :])
-            transitions.append(TransitionRisk(i, None, "death", names[i], "death"))
-    for i in range(ns):                                 # lapse exits
-        if lapse_any[i]:
-            sar_rows.append(csv_pad - reserve[:, i, :])
-            transitions.append(TransitionRisk(i, None, "lapse", names[i], "lapse"))
+    for rec in model.transitions:
+        if rec.kind == "death":
+            if not death_any[rec.from_state]:
+                continue
+            row = death_benefit[:, rec.from_state:rec.from_state + 1] - reserve[:, rec.from_state, :]
+        elif rec.kind == "lapse":
+            if not lapse_any[rec.from_state]:
+                continue
+            row = csv_pad - reserve[:, rec.from_state, :]
+        else:                                           # transfer -- see below
+            continue
+        sar_rows.append(row)
+        transitions.append(rec)
     for e in range(st.edge_from.shape[0]):              # inter-state transfers
         i, j = int(st.edge_from[e]), int(st.edge_to[e])
         if i == j:
             continue
-        s = lump[:, None] if st.edge_lump_sum[e] else 0.0
+        s = lump[:, None] if bool(st.edge_lump_sum[e]) else 0.0
         sar_rows.append(s + reserve[:, j, :] - reserve[:, i, :])
-        transitions.append(TransitionRisk(i, j, "transfer", names[i], names[j]))
+        transitions.append(TransitionRecord(i, j, "transfer", names[i], names[j]))
 
     sum_at_risk = np.stack(sar_rows, axis=1)            # (n_mp, n_transition, n_time+1)
     return sum_at_risk, tuple(transitions)
@@ -427,7 +431,8 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
         rbs, occ = _state_reserve(model_points, proj, mortality_cf, morbidity_cf,
                                   bel, discount_monthly)
         if sum_at_risk:
-            sar, transitions = _sum_at_risk(model_points, proj, rbs, occ)
+            sar, transitions = _sum_at_risk(model_points, proj, rbs, occ,
+                                            resolve_model(basis))
     return ValuedProjection(
         bel_path=bel,
         ra_path=ra,

@@ -6,7 +6,7 @@
 - **Semi-Markov** (상태 안에서의 **경과 시간** 에 의존하는 모델) 의 첫 사례 —
   앞의 Markov 챕터는 "어느 상태냐" 만 봤지만, 여기서는 "그 상태에 들어온 지
   몇 개월이냐" 가 보험금을 가른다
-- 등록된 모델이 없어 `State` / `Transition` / `StateModel` 로 **상태 모델을
+- 등록된 모델이 없어 `State` / `Transition` / `Model` 로 **상태 모델을
   직접 조립** — 쿡북에서 처음
 - `State.sojourn_tracking_months` (코호트 추적) 와 `Transition.sojourn_dependent`
   (경과 의존 전이) 의 연결
@@ -51,8 +51,8 @@
 
 ## 모델링 매핑 — Semi-Markov 3-state
 
-이 상품은 번들 모델 (`STATE_MODELS`) 에 없습니다. `State` / `Transition` /
-`StateModel` 로 직접 조립합니다 — 세 상태와 그 사이 전이를 그대로 적습니다.
+이 상품은 번들 모델 (`Model.from_preset`) 에 없습니다. `State` / `Transition` /
+`Model` 로 직접 조립합니다 — 세 상태와 그 사이 전이를 그대로 적습니다.
 
 :::{list-table}
 :header-rows: 1
@@ -122,7 +122,7 @@ reincid_fn = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 ```python
 import numpy as np
 import fastcashflow as fcf
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 
 # rate 함수 -- 모든 rate 는 평탄 상수 (실무는 경험률표 룩업)
 death_rate     = 1 - (1 - 0.01) ** 12  # 사망률 월 1%
@@ -133,7 +133,7 @@ incidence_rate = 1 - (1 - 0.05) ** 12  # 1차 진단 월 5%
 reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 
 # 상태 모델 -- healthy → post_first → post_second (직접 조립)
-model = StateModel(states=(
+model = Model(states=(
     State("healthy", pays_premium=True, transitions=(
         Transition("mortality"),                                          # in-force 감쇠
         Transition("ci_incidence", to="post_first", pays_lump_sum=True),  # 1차 진단금
@@ -299,7 +299,7 @@ pm_healthy = 0.005  # 건강 사망 연 0.5%
 pm_post    = 0.02   # 암진단 후 연 2% (건강의 4배)
 pm_lapse   = 0.05
 
-pm_model = StateModel(states=(
+pm_model = Model(states=(
     State("healthy", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
         Transition("ci_incidence", to="post_first", pays_lump_sum=True))),

@@ -23,11 +23,11 @@ import pytest
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow._numerics import _forward_occupancy_kernel
 from fastcashflow.gmm import measure
-from fastcashflow.state_model import State, StateModel, Transition
+from fastcashflow.multistate import State, Model, Transition
 
 # active --ci_incidence--> disabled (pays income) --mortality--> dead;
 # active also dies / lapses. No recovery -> plain Markov, V^i(t) well defined.
-DISABILITY = StateModel(states=(
+DISABILITY = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("ci_incidence", to="disabled"),
         Transition("mortality"),

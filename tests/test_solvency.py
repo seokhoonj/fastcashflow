@@ -17,7 +17,7 @@ from fastcashflow.coverage import CalculationMethod
 from fastcashflow._measurement.gmm import measure
 from fastcashflow._numerics import _cost_of_capital_ra
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.state_model import StateModel, State, Transition
+from fastcashflow.multistate import Model, State, Transition
 
 from conftest import make_death_basis, PATTERNS, annual_from_monthly
 
@@ -712,10 +712,10 @@ def test_vfa_interest_scr_hand_calc():
 # Solvency II disability sub-risk: Article 139 recovery / inception shocks).
 # ---------------------------------------------------------------------------
 
-def _di_recovery_model() -> StateModel:
+def _di_recovery_model() -> Model:
     """A two-state disability-income model: active -> disabled (inception) and
     disabled -> active (recovery)."""
-    return StateModel(states=(
+    return Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="disabled"),

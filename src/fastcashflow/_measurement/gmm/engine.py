@@ -58,13 +58,13 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import (
     _add_state_mortality_rates, _state_lapse_stack,
 )
-from fastcashflow.state_model import (
-    compile_state_model,
-    compile_state_model_with_duration,
+from fastcashflow.multistate import (
+    compile_model,
+    compile_model_with_duration,
     is_semi_markov,
     model_references_rate,
     needs_state_machine,
-    resolve_state_model,
+    resolve_model,
 )
 # GMM owns its result types and full-measurement assembler in _gmm; re-exported
 # here so engine's fast / settlement / segmentation assemblers can construct a
@@ -1487,7 +1487,7 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     if any(item.category == "maintenance" and item.base in ("surrender_value", "face")
            for item in basis.expense_items):
         return True
-    sm = resolve_state_model(basis)
+    sm = resolve_model(basis)
     if any(s.death_benefit_factor != 1.0 for s in sm.states):
         return True
     if any(tr.after_sojourn_months for s in sm.states for tr in s.transitions):
@@ -1680,11 +1680,11 @@ def _measure_fast(
                 basis.waiver_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
-        # In-force state machine -- see ``state_model.resolve_state_model``
+        # In-force state machine -- see ``multistate.resolve_model``
         # for the fallback policy when ``basis.state_model`` is unset.
         # The transition rates land on the sex x age x duration grid the
         # kernel indexes.
-        state_model = resolve_state_model(basis)
+        state_model = resolve_model(basis)
         semi_markov = is_semi_markov(state_model)
         if semi_markov:
             # Phase (c) path -- a state declared ``sojourn_tracking_months > 0`` tracks
@@ -1740,7 +1740,7 @@ def _measure_fast(
                         annual_to_monthly(
                             basis.disability_recovery_annual(
                                 sg4, ag4, dg4, ic4, cg4)))
-            compiled = compile_state_model_with_duration(
+            compiled = compile_model_with_duration(
                 state_model, rate_dict,
             )
             state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
@@ -1752,7 +1752,7 @@ def _measure_fast(
             benefit_state = compiled.benefit_state
             state_duration_max = compiled.state_duration_max
             periodic_benefit_term_months = compiled.periodic_benefit_term_months
-            # compile_state_model_with_duration returns ``edge_prob`` shape
+            # compile_model_with_duration returns ``edge_prob`` shape
             # ``(n_edges, sex, age, year, max_D)``. Transpose to put the
             # (sex, age, year) lookup axes outermost and the edge / cohort
             # indices last, so a per-edge per-cohort access for one
@@ -1764,7 +1764,7 @@ def _measure_fast(
             # above for the rates that are not duration-dependent. A custom
             # Markov topology that references ``ci_incidence`` works the same
             # way it does on the semi-Markov side, instead of hitting
-            # ``compile_state_model``'s "rate not supplied" error. The two
+            # ``compile_model``'s "rate not supplied" error. The two
             # 4D sojourn rates (``ci_reincidence``, ``disability_recovery``)
             # remain semi-Markov-only -- they need a cohort axis the Markov
             # kernel does not carry.
@@ -1798,7 +1798,7 @@ def _measure_fast(
                         annual_to_monthly(basis.lapse_waiver_annual(
                             sex_grid, issue_age_grid, duration_grid,
                             issue_class_grid, elapsed_grid)))
-            compiled = compile_state_model(state_model, rate_dict)
+            compiled = compile_model(state_model, rate_dict)
             state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
             edge_from = compiled.edge_from
             edge_to = compiled.edge_to
@@ -1806,7 +1806,7 @@ def _measure_fast(
             n_states = compiled.n_states
             premium_state = compiled.premium_state
             benefit_state = compiled.benefit_state
-            # compile_state_model returns ``edge_prob`` with the edge axis
+            # compile_model returns ``edge_prob`` with the edge axis
             # first -- (n_edges, sex, age, year). Transpose so the edge axis
             # is innermost: all edges for a given (sex, age, year) lookup
             # land in one cache line, ~25% faster on the multi-state hot
@@ -2118,7 +2118,7 @@ def _measure_fast(
             # Phase (c) semi-Markov path. The kernel takes a thinner arg
             # tuple than the Markov codegen -- the edge topology and the
             # per-state cohort counts are baked into the generated source
-            # (one cache file per unique StateModel + duration shape).
+            # (one cache file per unique Model + duration shape).
             # Coverage-rule and diagnosis-coverage passes are emitted
             # alongside the main pass so contracts mixing semi-Markov
             # cohort tracking with rule-bearing or diagnosis coverages work
@@ -2199,7 +2199,7 @@ def _measure_fast(
         if state_duration_max is not None:
             raise NotImplementedError(
                 "measure(full=False, backend='gpu') does not support semi-Markov "
-                "StateModels yet; use backend='cpu'"
+                "Models yet; use backend='cpu'"
             )
         if np.any(model_points.coverage_waiting) or np.any(model_points.coverage_reduction_end):
             raise ValueError(

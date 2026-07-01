@@ -69,26 +69,20 @@ from fastcashflow.reporting.report import (
 )
 from fastcashflow.projection import Cashflows, AccountTrajectory
 from fastcashflow.pricing.profit import ProfitSignature
-from fastcashflow.state_model import (
-    STATE_MODELS,
-    State,
-    StateModel,
-    Transition,
-)
 from fastcashflow._measurement.stochastic import StochasticResult
 from fastcashflow._measurement.transition import transition
 from fastcashflow._measurement.tvog import TVOGResult
 from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow import samples
 from fastcashflow import (  # namespaces
-    curves, gmm, paa, portfolio, projection, reinsurance, vfa, esg,
+    curves, gmm, multistate, paa, portfolio, projection, reinsurance, vfa, esg,
 )
 
 __version__ = "0.1.0.dev1"
 __all__ = [
     # measurement-model namespaces -- the headline entry points live here
     # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
-    "curves", "gmm", "paa", "vfa", "reinsurance",
+    "curves", "gmm", "multistate", "paa", "vfa", "reinsurance",
     "samples", "esg", "projection",
     "Basis", "BasisRouter", "ModelPoints", "Cashflows", "AccountTrajectory",
     "clear_codegen_cache",
@@ -123,5 +117,4 @@ __all__ = [
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP", "NO_GUARANTEE_RATE",
-    "StateModel", "State", "Transition", "STATE_MODELS",
 ]

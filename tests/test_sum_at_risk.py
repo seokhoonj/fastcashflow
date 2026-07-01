@@ -22,9 +22,9 @@ import pytest
 
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.gmm import measure
-from fastcashflow.state_model import State, StateModel, Transition
+from fastcashflow.multistate import State, Model, Transition
 
-DISABILITY = StateModel(states=(
+DISABILITY = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("ci_incidence", to="disabled"),
         Transition("mortality"),

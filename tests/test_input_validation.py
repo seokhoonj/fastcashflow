@@ -870,49 +870,49 @@ def test_mixed_term_months_tail_padded_consistently():
 
 
 # ---------------------------------------------------------------------------
-# StateModel validation paths
+# Model validation paths
 # ---------------------------------------------------------------------------
 
 def test_statemodel_rejects_negative_duration_max():
-    from fastcashflow import State
+    from fastcashflow.multistate import State
     with pytest.raises(ValueError, match="sojourn_tracking_months must be non-negative"):
         State(name="active", sojourn_tracking_months=-1)
 
 
 def test_statemodel_rejects_empty_states():
-    from fastcashflow import StateModel
+    from fastcashflow.multistate import Model
     with pytest.raises(ValueError, match="at least one state"):
-        StateModel(states=())
+        Model(states=())
 
 
 def test_statemodel_rejects_duplicate_state_names():
-    from fastcashflow import State, StateModel
+    from fastcashflow.multistate import State, Model
     with pytest.raises(ValueError, match="state names must be unique"):
-        StateModel(states=(State(name="active"), State(name="active")))
+        Model(states=(State(name="active"), State(name="active")))
 
 
 def test_statemodel_rejects_transition_to_unknown_state():
-    from fastcashflow import State, StateModel, Transition
+    from fastcashflow.multistate import State, Model, Transition
     s = State(name="active", transitions=(
         Transition(rate="mortality", to="GHOST"),
     ))
     with pytest.raises(ValueError, match="transition to an unknown state"):
-        StateModel(states=(s,))
+        Model(states=(s,))
 
 
 def test_statemodel_rejects_lump_sum_without_destination():
-    from fastcashflow import State, StateModel, Transition
+    from fastcashflow.multistate import State, Model, Transition
     s = State(name="active", transitions=(
         Transition(rate="mortality", to=None, pays_lump_sum=True),
     ))
     with pytest.raises(ValueError, match="lump-sum transition with no destination"):
-        StateModel(states=(s,))
+        Model(states=(s,))
 
 
 def test_statemodel_rejects_seating_index_out_of_range():
-    from fastcashflow import State, StateModel
+    from fastcashflow.multistate import State, Model
     with pytest.raises(ValueError, match="seating index out of range"):
-        StateModel(states=(State(name="active"),), seating=(5,))
+        Model(states=(State(name="active"),), seating=(5,))
 
 
 def test_construction_rejects_garbage_inputs():
@@ -1276,14 +1276,14 @@ def test_modelpoints_state_above_state_model_count_rejected():
     """A state index past the state_model's state count now raises a clear
     error at measurement (was a late IndexError at seating lookup), on both the
     full and fast paths. Codex 2026-06-07."""
-    from fastcashflow.state_model import STATE_MODELS
+    from fastcashflow.multistate import Model
     mp = ModelPoints(
         issue_age=np.array([40.0]), premium=np.array([100.0]),
         term_months=np.array([12]), state=np.array([99]),
         benefits={"DEATH": np.array([1000.0])},
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
-    basis = _basis1(state_model=STATE_MODELS["WAIVER"],
+    basis = _basis1(state_model=Model.from_preset("ACTIVE_WAIVER"),
                     waiver_incidence_annual=_flat_rate(0.01))
     with pytest.raises(ValueError, match="accepts only .* seating states"):
         fcf.gmm.measure(mp, basis)               # full path (projection.py)

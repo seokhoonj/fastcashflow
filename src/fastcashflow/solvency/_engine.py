@@ -285,7 +285,7 @@ _STATE_RATE_FIELD = {
 def scale_state_rate(rate_name: str, factor: float) -> Stress:
     """Scale a named in-force state-machine transition rate by ``factor``.
 
-    ``rate_name`` is the string a :class:`~fastcashflow.state_model.Transition`
+    ``rate_name`` is the string a :class:`~fastcashflow.multistate.Transition`
     carries -- e.g. ``"disability_recovery"`` for the disability-income recovery
     edge (disabled -> active), or ``"waiver_incidence"`` / ``"ci_incidence"`` for
     a disability / morbidity inception edge. The rate lives in its own ``Basis``

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 
@@ -20,7 +20,7 @@ _ZERO = _FLAT(0.0)
 
 def _two_state(factor):
     """healthy(0) + post(1); the post state pays ``factor`` x the death benefit."""
-    return StateModel(states=(
+    return Model(states=(
         State("healthy", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),),
@@ -83,7 +83,7 @@ def test_default_factor_is_bit_identical():
     """A model that declares no factor and one that sets 1.0 give the SAME
     claim element-for-element (==, not approx)."""
     mp = _seated_mp(1)
-    plain = StateModel(states=(
+    plain = Model(states=(
         State("healthy", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),)),   # no factor

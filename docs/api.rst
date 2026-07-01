@@ -477,17 +477,20 @@ State models
 ------------
 
 The in-force state machine driving multi-state products (waiver, paid-up,
-disability income, reincidence, long-term care). A :class:`StateModel` is a
-tuple of :class:`State` objects, each carrying its :class:`Transition` edges;
-``STATE_MODELS`` holds the bundled models.
+disability income, reincidence, long-term care), under the ``fcf.multistate``
+namespace. A :class:`~fastcashflow.multistate.Model` is a tuple of
+:class:`~fastcashflow.multistate.State` objects, each carrying its
+:class:`~fastcashflow.multistate.Transition` edges; ``Model.from_preset`` holds
+the bundled models.
 
-.. autoclass:: fastcashflow.StateModel
+.. autoclass:: fastcashflow.multistate.Model
+   :members: transitions, from_preset, presets
 
-.. autoclass:: fastcashflow.State
+.. autoclass:: fastcashflow.multistate.State
 
-.. autoclass:: fastcashflow.Transition
+.. autoclass:: fastcashflow.multistate.Transition
 
-.. autodata:: fastcashflow.STATE_MODELS
+.. autoclass:: fastcashflow.multistate.TransitionRecord
 
 .. autodata:: fastcashflow.STATE_ACTIVE
 

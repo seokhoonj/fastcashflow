@@ -160,9 +160,9 @@ def test_semi_markov_escalation_only_coverage_is_not_dropped():
     waiting / reduction, so a coverage carrying escalation (but no waiting /
     reduction) was excluded from the main pass AND skipped by the rule pass --
     dropped to zero. Reachable for an escalating care benefit on an LTC model."""
-    from fastcashflow import State, Transition, StateModel
+    from fastcashflow.multistate import State, Transition, Model
     _Z = lambda s, a, d: np.full(np.shape(a), 0.0)
-    sm = StateModel(states=(
+    sm = Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("disabled", sojourn_tracking_months=12, transitions=(Transition("mortality"),)),

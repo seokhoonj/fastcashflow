@@ -40,7 +40,7 @@ from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import (
     Basis, BasisRouter, CoverageRate, ExpenseItem,
 )
-from fastcashflow.state_model import STATE_MODELS
+from fastcashflow.multistate import Model
 from fastcashflow.coverage import (
     CalculationMethod, RATE_DRIVEN_METHODS,
 )
@@ -895,18 +895,18 @@ def read_basis(path: Path | str) -> "BasisRouter":
                     "amount_per_policy / amount_per_unit."
                 )
         # Optional state_model column -- non-programmer actuary picks a
-        # bundled topology by its registry key (e.g. "WAIVER"). Blank cell
+        # bundled topology by its preset key (e.g. "ACTIVE_WAIVER"). Blank cell
         # leaves Basis.state_model = None; an unknown key is an
         # error with a hint listing the registered keys.
         state_model_key = cell("state_model")
         if state_model_key is not None:
             key = str(state_model_key).strip()
             try:
-                kwargs["state_model"] = STATE_MODELS[key]
-            except KeyError:
+                kwargs["state_model"] = Model.from_preset(key)
+            except ValueError:
                 raise ValueError(
-                    f"{where}: state_model={key!r} is not in STATE_MODELS "
-                    f"(known: {sorted(STATE_MODELS)})"
+                    f"{where}: state_model={key!r} is not a known preset "
+                    f"(known: {', '.join(Model.presets())})"
                 ) from None
         if seg_key in result:
             raise ValueError(

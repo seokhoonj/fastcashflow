@@ -501,7 +501,7 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
   처리되는지. 본 챕터가 한 가지 산출방법만 다루는 이유.
 - 사망 + 단순 진단 일시금 (작성 예정) — 사망보험에 진단보험금
   (CI = Critical Illness = 진단) 일시금 결합. 첫 번째 추가 담보 도입.
-- 보험료 납입면제 (waiver) (작성 예정) — `STATE_MODELS["WAIVER"]`
+- 보험료 납입면제 (waiver) (작성 예정) — `Model.from_preset("ACTIVE_WAIVER")`
   입문. active → waiver 상태 추적.
 - [검증 패턴](../workflow/validation) — `gmm.trace` / `gmm.trace_bel_step` /
   `gmm.trace_csm_step` 으로 본 챕터의 숫자가 어디서 왔는지 풀어 보기.

@@ -131,7 +131,7 @@
   - 다루는 것
 * - 3.1
   - [보험료 납입면제 (waiver)](markov/waiver)
-  - `STATE_MODELS["WAIVER"]` 입문. active → waiver 진입.
+  - `Model.from_preset("ACTIVE_WAIVER")` 입문. active → waiver 진입.
 * - 3.2
   - [paid-up 분리 (3-state)](markov/paid-up)
   - active / waiver / paidup 을 각각 별도 state 로. 납입후 해지율 점프.
@@ -215,7 +215,7 @@
   - `basis.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
 * - 7.2
   - [워크북 — 다중 segment / 다종 상품](io/workbook-multi)
-  - `measure` + 상품 / 채널 별 다른 StateModel.
+  - `measure` + 상품 / 채널 별 다른 Model.
 :::
 
 ### 8. 분석 / 검증

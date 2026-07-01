@@ -15,9 +15,10 @@ flat, zero-discount basis.
 import numpy as np
 import pytest
 
-from fastcashflow import STATE_WAIVER, Basis, CalculationMethod, ModelPoints, State, StateModel, Transition, CoverageRate
+from fastcashflow import STATE_WAIVER, Basis, CalculationMethod, ModelPoints, CoverageRate
+from fastcashflow.multistate import State, Model, Transition
 from fastcashflow.gmm import measure
-from fastcashflow.state_model import compile_state_model
+from fastcashflow.multistate import compile_model
 
 from conftest import annual_from_monthly as _annual
 
@@ -27,10 +28,10 @@ from conftest import annual_from_monthly as _annual
 Z_75 = 0.6744897501960817
 
 
-def _disability_model(*, pays_lump_sum=True) -> StateModel:
+def _disability_model(*, pays_lump_sum=True) -> Model:
     """Active / disabled model -- disability income on the disabled state,
     an optional lump sum on the inception transition."""
-    return StateModel(
+    return Model(
         states=(
             State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
@@ -63,15 +64,15 @@ def _basis(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
 
 
 # ---------------------------------------------------------------------------
-# compile_state_model -- the new flags
+# compile_model -- the new flags
 # ---------------------------------------------------------------------------
 
 def test_compile_marks_benefit_state_and_lump_sum():
-    """compile_state_model surfaces the benefit state and the lump-sum edge."""
+    """compile_model surfaces the benefit state and the lump-sum edge."""
     rates = {"mortality": np.array([[0.01]]),
              "waiver_incidence": np.array([[0.05]]),
              "lapse": np.array([[0.0]])}
-    compiled = compile_state_model(_disability_model(), rates)
+    compiled = compile_model(_disability_model(), rates)
     assert compiled.n_states == 2
     assert list(compiled.premium_state) == [True, False]    # active pays premium
     assert list(compiled.benefit_state) == [False, True]    # disabled pays a benefit
@@ -86,7 +87,7 @@ def test_compile_marks_benefit_state_and_lump_sum():
 def test_lump_sum_on_exit_transition_rejected():
     """A lump sum must attach to a transition with a destination."""
     with pytest.raises(ValueError, match="lump-sum"):
-        StateModel(states=(
+        Model(states=(
             State("active", pays_premium=True, transitions=(
                 Transition("mortality", pays_lump_sum=True),    # to=None -- an exit
             )),

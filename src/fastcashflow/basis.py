@@ -9,7 +9,7 @@ from types import MappingProxyType
 import numpy as np
 
 from fastcashflow._typing import DurationRateFn, FloatArray, RateFn, RateLike
-from fastcashflow.state_model import StateModel
+from fastcashflow.multistate import Model
 
 
 # RateFn fields on Basis that follow the standard
@@ -757,11 +757,11 @@ class Basis:
         (:attr:`fastcashflow.model_points.ModelPoints.calculation_methods`),
         not here.
     state_model :
-        The product's in-force state machine -- a :class:`~fastcashflow.state_model.StateModel`
+        The product's in-force state machine -- a :class:`~fastcashflow.multistate.Model`
         declaring the transient states, their transitions and which states
         pay premium or a benefit. ``None`` uses the default active / waiver
         model
-        (:data:`~fastcashflow.state_model.WAIVER_MODEL`); the
+        (:data:`~fastcashflow.multistate.ACTIVE_WAIVER_MODEL`); the
         ``waiver_incidence_annual`` rate then drives the active -> waiver
         transition. A product with a different state set supplies its own.
     """
@@ -802,14 +802,14 @@ class Basis:
     waiver_incidence_annual: RateFn | None = None
     # Lapse rate for the paid-up state -- used only by a state model
     # whose paid-up state references the ``lapse_paidup`` transition rate
-    # (e.g. STATE_MODELS["WAIVER_PAIDUP"]). Paid-up contracts (premium
+    # (e.g. Model.from_preset("ACTIVE_WAIVER_PAIDUP")). Paid-up contracts (premium
     # payment finished) typically surrender at a different rate than
     # premium-paying actives -- the Korean post-payment lapse jump. When
     # None the paid-up state falls back to ``lapse_annual``.
     lapse_paidup_annual: RateFn | None = None
     # Lapse rate for the WAIVER state -- used only by a state model whose
     # waiver state references the ``lapse_waiver`` transition rate (e.g.
-    # STATE_MODELS["WAIVER"]). A premium-waived contract (waiver triggered by
+    # Model.from_preset("ACTIVE_WAIVER")). A premium-waived contract (waiver triggered by
     # a diagnosis / disability) usually surrenders at a much LOWER rate than a
     # premium-paying active -- it holds valuable free-of-premium cover, so
     # anti-selection keeps it in force; the only realistic exit is cashing out
@@ -905,7 +905,7 @@ class Basis:
     premium_load: float = 0.0
     settlement_pattern: FloatArray | None = None
     coverages: tuple[CoverageRate, ...] = ()
-    state_model: StateModel | None = None
+    state_model: Model | None = None
 
     def __post_init__(self) -> None:
         # Reject obviously-wrong scalar basis fields at construction time.
@@ -1252,7 +1252,7 @@ def _describe_basis_lines(
                 trs,
             ))
         sm_body = [(f"states : tuple  (len={len(sm.states)})", state_items)]
-    sections.append((f"{marks[4]} state_model : StateModel", sm_body))
+    sections.append((f"{marks[4]} state_model : Model", sm_body))
 
     sections.append((
         f"{marks[5]} {_DESCRIBE_GROUPS[3][0]}",

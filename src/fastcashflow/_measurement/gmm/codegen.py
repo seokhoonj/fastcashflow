@@ -26,7 +26,7 @@ from numba import njit, prange
 # Codegen specialisation -- the multi-state fast kernel
 # ---------------------------------------------------------------------------
 #
-# The multi-state CPU fast-path (full=False) kernel is generated per StateModel: the state
+# The multi-state CPU fast-path (full=False) kernel is generated per Model: the state
 # count, the full edge topology, the lump-sum flags, and which states pay
 # premium or a benefit all become part of the generated Python source so
 # numba's compiled inner loop has no array indirections left, only scalar
@@ -488,7 +488,7 @@ def clear_codegen_cache(*, prune_older_than_days: float | None = None) -> int:
 # Semi-Markov codegen (Phase (c) prototype -- cancer reincidence)
 # ---------------------------------------------------------------------------
 #
-# When the StateModel declares any state with ``sojourn_tracking_months > 0`` the engine
+# When the Model declares any state with ``sojourn_tracking_months > 0`` the engine
 # tracks per-cohort occupancy in that state -- ``occ[state, tau]`` where
 # ``tau`` is the sojourn time (months since entering the state). Transitions
 # marked ``sojourn_dependent=True`` then carry per-cohort rates, the natural
@@ -502,7 +502,7 @@ def clear_codegen_cache(*, prune_older_than_days: float | None = None) -> int:
 # numba compile path as the Markov codegen -- compile-once per topology.
 #
 # Coverage-rule and diagnosis-coverage passes are emitted as no-op stubs when
-# the StateModel is semi-Markov: this prototype targets the cancer-reincidence
+# the Model is semi-Markov: this prototype targets the cancer-reincidence
 # product, which has no rule-bearing or diagnosis coverages on the model
 # points themselves -- the reincidence benefit rides the transition lump-sum.
 # Full coverage-rule / diagnosis support for semi-Markov is a follow-up.
@@ -931,7 +931,7 @@ def _scalar_kernel(issue_index, sex, term_months, contract_boundary_months,
     (:func:`_markov_kernel_source`).
 
     Used when the in-force projection collapses to a single survival track --
-    no user-supplied StateModel, no waiver inception, every model point
+    no user-supplied Model, no waiver inception, every model point
     seated in the active state. The in-force is carried as a scalar; the
     monthly decay is one multiply against the precomputed
     ``survival_monthly[sex, age, year] = (1 - q_monthly) * (1 - l_monthly)``

@@ -84,7 +84,7 @@ flowchart LR
 ```python
 import numpy as np
 import fastcashflow as fcf
-from fastcashflow import State, Transition, StateModel
+from fastcashflow.multistate import State, Transition, Model
 
 # 계리적 가정 -- 간병 발생률 연령표 (long-form 룩업; 실무는 Excel)
 ages  = np.array([    50,     60,     70,     80,     90])
@@ -117,7 +117,7 @@ care_mort   = 0.20    # 간병 상태 상승 사망률 (연 20%)
 lapse_rate    = 0.03  # 해지 연 3%
 
 # 상태 모델 -- active -> care; care 는 진단금(lump) + 월정액(36 회) + 상승 사망률
-model = StateModel(states=(
+model = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("mortality"),
         Transition("lapse"),
@@ -177,7 +177,7 @@ Loss :              0
 ```python
 zero = 0.0
 
-toy_model = StateModel(states=(
+toy_model = Model(states=(
     State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),
     State("care", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,  # 3 회 보증

@@ -20,8 +20,8 @@ import numpy as np
 import pytest
 from numba import cuda
 
-from fastcashflow import (
-    STATE_MODELS, Basis, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints)
+from fastcashflow import Basis, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints
+from fastcashflow.multistate import Model
 from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
@@ -276,7 +276,7 @@ def test_fast_gpu_matches_cpu_with_transition():
         mortality_annual=flat(0.001),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         waiver_incidence_annual=flat(0.02),
-        state_model=STATE_MODELS["WAIVER"],
+        state_model=Model.from_preset("ACTIVE_WAIVER"),
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_items=(

@@ -39,7 +39,7 @@
 * - 자리
   - 무엇
 * - `Basis.state_model`
-  - `STATE_MODELS["WAIVER"]` — active / waiver 2-state 모델
+  - `Model.from_preset("ACTIVE_WAIVER")` — active / waiver 2-state 모델
 * - `Basis.waiver_incidence_annual`
   - active → waiver 연 전이율 callable `(sex, issue_age, duration)`
 * - `ModelPoints.state`
@@ -84,7 +84,8 @@ flowchart LR
 
 ```python
 import fastcashflow as fcf
-from fastcashflow import STATE_MODELS, STATE_ACTIVE
+from fastcashflow import STATE_ACTIVE
+from fastcashflow.multistate import Model
 
 # 사망률 함수 -- 월 1% 의 연 환산 (평탄)
 death_rate  = 1 - (1 - 0.01) ** 12
@@ -101,7 +102,7 @@ basis = fcf.Basis(
     discount_annual         = 0.0,                     # 연 할인율 0 (검증 단순화)
     ra_confidence           = 0.75,                    # 위험조정 신뢰수준 75%
     mortality_cv            = 0.10,                    # 사망률 변동계수 10%
-    state_model             = STATE_MODELS["WAIVER"],  # 2-state: active / waiver
+    state_model             = Model.from_preset("ACTIVE_WAIVER"),  # 2-state: active / waiver
     coverages               = (
         fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종 (청구 rate = death_rate)
     ),
@@ -194,7 +195,7 @@ BEL        = 285.22
 ### paid-up 분리
 
 납입후 (paid-up) 상태를 active / waiver 와 별도로 추적하려면 3-state 모델이
-필요합니다 — [3.2 paid-up 분리](paid-up). 본 챕터의 `STATE_MODELS["WAIVER"]`
+필요합니다 — [3.2 paid-up 분리](paid-up). 본 챕터의 `Model.from_preset("ACTIVE_WAIVER")`
 는 active / waiver 2-state 만 다룹니다.
 
 ## 함정
@@ -202,8 +203,8 @@ BEL        = 285.22
 ### 함정 1 — `state_model` 을 설정하지 않은 경우
 
 `waiver_incidence_annual` 만 넣고 `state_model` 을 생략하면 엔진이
-`WAIVER_MODEL` 을 암묵적으로 적용합니다. 동작은 같지만, **명시적으로
-`state_model = STATE_MODELS["WAIVER"]` 를 설정하는 것** 이 의도를 드러내고
+`ACTIVE_WAIVER_MODEL` 을 암묵적으로 적용합니다. 동작은 같지만, **명시적으로
+`state_model = Model.from_preset("ACTIVE_WAIVER")` 를 설정하는 것** 이 의도를 드러내고
 다른 state 모델로 바꿀 때 한 자리만 고치면 되는 안전한 패턴입니다.
 
 ### 함정 2 — 시작 상태를 안 줌

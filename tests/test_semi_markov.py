@@ -9,12 +9,12 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.state_model import StateModel, State, Transition
+from fastcashflow.multistate import Model, State, Transition
 from conftest import PATTERNS, annual_from_monthly as _annual
 
 
-def _cancer_reincidence_model(sojourn_tracking_months: int) -> StateModel:
-    return StateModel(states=(
+def _cancer_reincidence_model(sojourn_tracking_months: int) -> Model:
+    return Model(states=(
         State("healthy", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_incidence", to="post_first"),
@@ -416,8 +416,8 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
 # is paid each month its occupancy is held.
 
 
-def _di_model(sojourn_tracking_months: int) -> StateModel:
-    return StateModel(states=(
+def _di_model(sojourn_tracking_months: int) -> Model:
+    return Model(states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="disabled"),

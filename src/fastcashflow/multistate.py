@@ -7,14 +7,14 @@ a small set of transient states; each month a transition matrix advances it,
 the engine's codegen fast kernel and the CUDA kernel -- run that recursion on a flat
 edge list and are state-machine-agnostic: they carry no hardcoded state set.
 
-This module is the product-facing layer. A :class:`StateModel` declares the
+This module is the product-facing layer. A :class:`Model` declares the
 states, their transitions and which states pay premium or a benefit, all as
 data. States can *be* data -- rather than a per-product DSL -- because the
 occupancy recursion treats every state identically; there is no per-state
 engine logic. (Coverage ``type``, by contrast, needs per-type logic and so
 stays a fixed vocabulary.)
 
-:func:`compile_state_model` turns a :class:`StateModel` plus the evaluated
+:func:`compile_model` turns a :class:`Model` plus the evaluated
 assumption rates into the flat edge arrays the kernels consume.
 
 The transition probabilities follow the standard ordered multiple-decrement
@@ -39,11 +39,11 @@ from fastcashflow._typing import BoolArray, FloatArray, IntArray
 
 
 @dataclass(frozen=True, slots=True)
-class CompiledStateModel:
-    """Flat edge-tensor view of a compiled :class:`StateModel`.
+class CompiledModel:
+    """Flat edge-tensor view of a compiled :class:`Model`.
 
-    Returned by both :func:`compile_state_model` (Markov) and
-    :func:`compile_state_model_with_duration` (semi-Markov). The two
+    Returned by both :func:`compile_model` (Markov) and
+    :func:`compile_model_with_duration` (semi-Markov). The two
     paths share this shape; ``state_duration_max`` distinguishes them --
     ``None`` from the Markov compile, an ``(n_states,)`` int array from
     the semi-Markov compile (per-state cohort count, 1 for untracked
@@ -111,12 +111,35 @@ class CompiledStateModel:
 
 
 @dataclass(frozen=True, slots=True)
+class TransitionRecord:
+    """One transition in a model's transition structure (its transMat analogue).
+
+    Enumerated by :attr:`Model.transitions` -- the model-level list of every
+    transition the topology declares, in a stable order, independent of any
+    particular book's rates (a transition is listed if declared, even where a
+    book sets its rate to zero). It is the descriptor axis the per-transition
+    sum at risk reads for its ``n_transition`` order and labels.
+
+    ``from_state`` / ``to_state`` are transient-state indices; ``to_state`` is
+    ``None`` for an absorbing exit (death / lapse leave the in-force set).
+    ``kind`` is ``"death"``, ``"lapse"`` or ``"transfer"`` (an inter-state edge).
+    ``from_name`` / ``to_name`` label them for display (``to_name`` is the
+    destination state name, or ``"death"`` / ``"lapse"``).
+    """
+    from_state: int
+    to_state: "int | None"
+    kind: str
+    from_name: str
+    to_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class Transition:
     """One transition out of a state.
 
     ``rate`` names an assumption rate -- ``"mortality"``, ``"lapse"``,
     ``"waiver_incidence"`` and so on -- evaluated by the engine and supplied
-    to :func:`compile_state_model`. ``to`` is the destination state's name
+    to :func:`compile_model`. ``to`` is the destination state's name
     when the transition moves occupancy to another transient state (waiver
     inception, recovery, reincidence), or ``None`` when it removes occupancy
     from the in-force set entirely (death, lapse).
@@ -319,7 +342,7 @@ class State:
 
 
 @dataclass(frozen=True, slots=True)
-class StateModel:
+class Model:
     """A product's in-force state machine, declared as data.
 
     ``states`` are the transient states; position fixes the kernel state
@@ -330,8 +353,8 @@ class StateModel:
     index. It defaults to seating every model point on state 0.
 
     The occupancy recursion treats every state identically, so an arbitrary
-    StateModel runs on the existing kernels with no per-product code -- see
-    the module docstring and :func:`compile_state_model`.
+    Model runs on the existing kernels with no per-product code -- see
+    the module docstring and :func:`compile_model`.
     """
 
     states: tuple[State, ...]
@@ -342,7 +365,7 @@ class StateModel:
         object.__setattr__(self, "states", states)
         object.__setattr__(self, "seating", tuple(int(s) for s in self.seating))
         if not states:
-            raise ValueError("a StateModel needs at least one state")
+            raise ValueError("a Model needs at least one state")
         names = {s.name for s in states}
         if len(names) != len(states):
             raise ValueError("state names must be unique")
@@ -377,6 +400,70 @@ class StateModel:
         """Number of transient states."""
         return len(self.states)
 
+    @property
+    def transitions(self) -> tuple[TransitionRecord, ...]:
+        """The model's transition structure as an ordered tuple of records.
+
+        The transMat analogue: every transition the topology declares, in a
+        stable order, derived from the state / transition declaration alone
+        (a transition is listed even if a particular book sets its rate to
+        zero). The order groups all death exits, then all lapse exits, then
+        all inter-state transfers -- each group in state-index order, and
+        within a state in declaration order:
+
+        * a **death** record for each state that declares a mortality decrement
+          (a transition with ``rate == "mortality"``);
+        * a **lapse** record for each state that declares a lapse decrement (a
+          rate-driven ``to=None`` exit that is not the mortality one);
+        * a **transfer** record for each declared inter-state transition
+          (``to`` set to a different state), the ``ModelPoints`` occupancy
+          moving from ``from_state`` to ``to_state``.
+
+        The per-transition sum at risk reads this for its axis order and its
+        descriptors; it emits a row for the transitions a given book actually
+        exercises (so a book with a zero decrement carries no row for it),
+        keeping this list a structural superset of that book's axis.
+        """
+        index = {s.name: i for i, s in enumerate(self.states)}
+        records: list[TransitionRecord] = []
+        for i, s in enumerate(self.states):
+            if any(tr.rate == "mortality" for tr in s.transitions):
+                records.append(TransitionRecord(i, None, "death", s.name, "death"))
+        for i, s in enumerate(self.states):
+            if any(tr.to is None and tr.rate is not None and tr.rate != "mortality"
+                   for tr in s.transitions):
+                records.append(TransitionRecord(i, None, "lapse", s.name, "lapse"))
+        for i, s in enumerate(self.states):
+            for tr in s.transitions:
+                if tr.to is not None and index[tr.to] != i:
+                    records.append(
+                        TransitionRecord(i, index[tr.to], "transfer", s.name, tr.to))
+        return tuple(records)
+
+    @classmethod
+    def from_preset(cls, name: str) -> "Model":
+        """Return the bundled model registered under ``name``.
+
+        A non-programmer actuary can pick a topology by name -- in the
+        ``segments`` sheet's ``state_model`` column, or in Python via
+        ``Model.from_preset("ACTIVE_WAIVER")``. The preset key lists the
+        transient states in state-index order (``ACTIVE_WAIVER`` = active +
+        waiver; ``ACTIVE_WAIVER_PAIDUP`` = active + waiver + paid-up). Users
+        with a topology outside the registry build their own :class:`Model`.
+        """
+        try:
+            return _PRESETS[name]
+        except KeyError:
+            raise ValueError(
+                f"unknown state model preset {name!r} "
+                f"(known: {', '.join(cls.presets())})"
+            ) from None
+
+    @classmethod
+    def presets(cls) -> tuple[str, ...]:
+        """The available :meth:`from_preset` names, in sorted order."""
+        return tuple(sorted(_PRESETS))
+
 
 # The default in-force model -- two transient states. ``active`` pays premium
 # and is subject to mortality, waiver inception and lapse; ``waiver`` (premium
@@ -391,7 +478,7 @@ class StateModel:
 # the active state and both STATE_WAIVER (1) and STATE_PAIDUP (2) on the waiver
 # state: a paid-up contract and a waiver contract have identical cash flows,
 # differing only in the cause premiums ceased.
-WAIVER_MODEL = StateModel(
+ACTIVE_WAIVER_MODEL = Model(
     states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"),
@@ -408,7 +495,7 @@ WAIVER_MODEL = StateModel(
 
 
 # Three-state variant -- active / waiver / paid-up as *separate* states.
-# Unlike WAIVER_MODEL (which seats paid-up onto the waiver state, giving the
+# Unlike ACTIVE_WAIVER_MODEL (which seats paid-up onto the waiver state, giving the
 # two identical cash flows), this model keeps paid-up distinct so it can carry
 # its own lapse: the paid-up state references the ``lapse_paidup`` rate
 # (Basis.lapse_paidup_annual, falling back to lapse_annual). The Korean
@@ -427,7 +514,7 @@ WAIVER_MODEL = StateModel(
 # paid-up (STATE_PAIDUP). Waiver stays a separate state through premium_term
 # (a premium-waived contract is not the same population as a normal paid-up
 # one), so it keeps ``lapse_waiver``, not ``lapse_paidup``.
-WAIVER_PAIDUP_MODEL = StateModel(
+ACTIVE_WAIVER_PAIDUP_MODEL = Model(
     states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"),
@@ -448,29 +535,27 @@ WAIVER_PAIDUP_MODEL = StateModel(
 )
 
 
-# Named registry of bundled StateModels. A non-programmer actuary can pick a
-# topology by name -- in the ``segments`` sheet's ``state_model`` column, in
-# Python via ``STATE_MODELS["WAIVER"]``, or anywhere else a string label is a
-# natural input. Additions land here as fixed-vocabulary entries -- the same
-# convention as the coverage CalculationMethods; users with a topology outside
-# the registry still build their own ``StateModel`` in code.
-#
-# Exposed through a read-only mapping so a stray ``STATE_MODELS["WAIVER"] =
-# my_custom_model`` from user / plugin code cannot silently swap the
+# Named registry of bundled models, reached through :meth:`Model.from_preset`.
+# A non-programmer actuary can pick a topology by name -- in the ``segments``
+# sheet's ``state_model`` column, or in Python via
+# ``Model.from_preset("ACTIVE_WAIVER")``. Additions land here as
+# fixed-vocabulary entries -- the same convention as the coverage
+# CalculationMethods; users with a topology outside the registry still build
+# their own ``Model`` in code. The key lists the transient states in
+# state-index order. It is module-private and reached only through the
+# ``from_preset`` / ``presets`` factory, so user / plugin code cannot swap a
 # bundled topology process-wide (which would change every later segment that
-# resolves "WAIVER" by name). Lookup (``STATE_MODELS["WAIVER"]``) and
-# iteration (``sorted(STATE_MODELS)``) work as before; mutation raises
-# ``TypeError``.
-STATE_MODELS: Mapping[str, StateModel] = MappingProxyType({
-    "WAIVER": WAIVER_MODEL,
-    "WAIVER_PAIDUP": WAIVER_PAIDUP_MODEL,
+# resolves the name).
+_PRESETS: Mapping[str, Model] = MappingProxyType({
+    "ACTIVE_WAIVER": ACTIVE_WAIVER_MODEL,
+    "ACTIVE_WAIVER_PAIDUP": ACTIVE_WAIVER_PAIDUP_MODEL,
 })
 
 
-def model_references_rate(model: StateModel, rate_name: str) -> bool:
+def model_references_rate(model: Model, rate_name: str) -> bool:
     """Return True if any transition in the model references ``rate_name``.
 
-    The engine builds the rate dict it hands to :func:`compile_state_model`
+    The engine builds the rate dict it hands to :func:`compile_model`
     from the rates the resolved model actually references, so an optional
     rate (e.g. ``lapse_paidup``) is built only when the topology in play
     uses it.
@@ -479,26 +564,26 @@ def model_references_rate(model: StateModel, rate_name: str) -> bool:
                for s in model.states for tr in s.transitions)
 
 
-def is_semi_markov(model: StateModel) -> bool:
+def is_semi_markov(model: Model) -> bool:
     """Return True if any state in the model tracks duration cohorts.
 
     A semi-Markov state has ``sojourn_tracking_months > 0`` and tracks per-cohort
     occupancy; its outgoing transitions may then be ``sojourn_dependent``.
     A model with no such state is pure Markov and runs through the original
-    :func:`compile_state_model` path.
+    :func:`compile_model` path.
     """
     return any(s.sojourn_tracking_months > 0 for s in model.states)
 
 
-def resolve_state_model(basis) -> "StateModel":
-    """Return the StateModel driving the projection for these basis.
+def resolve_model(basis) -> "Model":
+    """Return the Model driving the projection for these basis.
 
     Uses the caller-supplied ``basis.state_model`` when set, and falls
-    back to the bundled :data:`WAIVER_MODEL` -- the most common Korean
-    protection topology, active / waiver / paid-up. Centralising the
-    fallback keeps the engine and the projection layer from drifting.
+    back to the bundled :data:`ACTIVE_WAIVER_MODEL` -- the most common Korean
+    protection topology, active / waiver. Centralising the fallback keeps the
+    engine and the projection layer from drifting.
     """
-    return basis.state_model or WAIVER_MODEL
+    return basis.state_model or ACTIVE_WAIVER_MODEL
 
 
 def needs_state_machine(model_points, basis) -> bool:
@@ -518,16 +603,16 @@ def needs_state_machine(model_points, basis) -> bool:
             or bool(np.any(model_points.state)))
 
 
-def compile_state_model(
-    model: StateModel, rates: dict[str, FloatArray]
-) -> CompiledStateModel:
-    """Compile a StateModel and its rates into the kernel edge arrays.
+def compile_model(
+    model: Model, rates: dict[str, FloatArray]
+) -> CompiledModel:
+    """Compile a Model and its rates into the kernel edge arrays.
 
     ``rates`` maps each rate name a transition references to its evaluated
     array; the arrays broadcast to a common grid shape -- the kernels index
     its trailing axes (per model point, or per sex / age / duration).
 
-    Returns a :class:`CompiledStateModel` with ``state_duration_max=None``.
+    Returns a :class:`CompiledModel` with ``state_duration_max=None``.
 
     Each state contributes one edge per transition with a transient
     destination -- carrying that transition's dependent probability -- plus
@@ -537,12 +622,12 @@ def compile_state_model(
 
     This function is **Markov-only**: it raises ``ValueError`` if the model
     has any state with ``sojourn_tracking_months > 0``. Use
-    :func:`compile_state_model_with_duration` for semi-Markov models.
+    :func:`compile_model_with_duration` for semi-Markov models.
     """
     if is_semi_markov(model):
         raise ValueError(
-            "compile_state_model is Markov-only; use "
-            "compile_state_model_with_duration for a model with "
+            "compile_model is Markov-only; use "
+            "compile_model_with_duration for a model with "
             "duration-tracked states"
         )
     for s in model.states:
@@ -555,7 +640,7 @@ def compile_state_model(
     arrays = {name: np.asarray(arr, dtype=np.float64)
               for name, arr in rates.items()}
     if not arrays:
-        raise ValueError("compile_state_model needs at least one rate array")
+        raise ValueError("compile_model needs at least one rate array")
     grid = np.broadcast_shapes(*(a.shape for a in arrays.values()))
     index = {s.name: i for i, s in enumerate(model.states)}
 
@@ -590,7 +675,7 @@ def compile_state_model(
             except KeyError:
                 raise ValueError(
                     f"state {state.name!r} references rate {rname!r}, "
-                    f"which was not supplied to compile_state_model"
+                    f"which was not supplied to compile_model"
                 ) from None
             if tr.rate == "mortality":
                 # The death exit fires on whoever survived the earlier
@@ -609,7 +694,7 @@ def compile_state_model(
         death_exit_rows.append(death_exit)
         premium_term_to.append(pt_to)
 
-    return CompiledStateModel(
+    return CompiledModel(
         edge_from=np.array(edge_from, dtype=np.int64),
         edge_to=np.array(edge_to, dtype=np.int64),
         edge_prob=np.ascontiguousarray(np.stack(edge_prob)),
@@ -626,12 +711,12 @@ def compile_state_model(
     )
 
 
-def compile_state_model_with_duration(
-    model: StateModel, rates: dict[str, FloatArray]
-) -> CompiledStateModel:
-    """Compile a semi-Markov StateModel into duration-aware kernel arrays.
+def compile_model_with_duration(
+    model: Model, rates: dict[str, FloatArray]
+) -> CompiledModel:
+    """Compile a semi-Markov Model into duration-aware kernel arrays.
 
-    The cohort-aware counterpart of :func:`compile_state_model`. States
+    The cohort-aware counterpart of :func:`compile_model`. States
     declared with ``sojourn_tracking_months > 0`` are tracked by monthly cohort: the
     occupancy is a length-``sojourn_tracking_months`` vector indexed by sojourn time
     (months since entering the state, with the last cohort absorbing
@@ -645,7 +730,7 @@ def compile_state_model_with_duration(
     dependent rate has an extra trailing axis of length ``sojourn_tracking_months``
     for the source state (cohort axis).
 
-    Returns a :class:`CompiledStateModel`:
+    Returns a :class:`CompiledModel`:
 
     * ``edge_from`` / ``edge_to`` -- ``(n_edges,)`` state indices.
       ``edge_to == edge_from`` marks the residual stay edge (cohort
@@ -673,7 +758,7 @@ def compile_state_model_with_duration(
               for name, arr in rates.items()}
     if not arrays:
         raise ValueError(
-            "compile_state_model_with_duration needs at least one rate array"
+            "compile_model_with_duration needs at least one rate array"
         )
     index = {s.name: i for i, s in enumerate(model.states)}
     # Effective cohort count per state: untracked -> 1, tracked -> sojourn_tracking_months.
@@ -763,7 +848,7 @@ def compile_state_model_with_duration(
                 raise ValueError(
                     f"state {state.name!r} references rate {rname!r}, "
                     f"which was not supplied to "
-                    f"compile_state_model_with_duration"
+                    f"compile_model_with_duration"
                 )
 
         D = max(state.sojourn_tracking_months, 1)
@@ -846,7 +931,7 @@ def compile_state_model_with_duration(
     perm = (0,) + tuple(range(2, stacked.ndim)) + (1,)
     edge_prob = np.ascontiguousarray(np.transpose(stacked, perm))
 
-    return CompiledStateModel(
+    return CompiledModel(
         edge_from=np.array(edge_from, dtype=np.int64),
         edge_to=np.array(edge_to, dtype=np.int64),
         edge_prob=edge_prob,
