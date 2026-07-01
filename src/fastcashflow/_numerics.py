@@ -394,6 +394,101 @@ def _roll_forward_kernel(mortality_cf, morbidity_cf, disability_cf, expense_cf,
 
 
 @njit(parallel=True, cache=True)
+def _forward_occupancy_kernel(edge_from, edge_to, edge_prob, n_states,
+                              start_state, count, boundary, n_time):
+    """Replay the per-state in-force occupancy from the compiled edge list.
+
+    ``occ[mp, s, t]`` is the count in transient state ``s`` at the start of
+    month ``t``, advanced along the same edges the projection uses::
+
+        occ[t+1, k] = sum_{edges (j -> k)} occ[t, j] * edge_prob[e, mp, t // 12]
+
+    The compiled edge list carries the residual self-loop (the ``survive``
+    probability) but no death / lapse exit edges, so occupancy leaks out of the
+    in-force set by exactly the exit probability. ``occ[:, :, 0]`` seats each
+    model point's ``count`` on its ``start_state``; occupancy up to and
+    including the model point's ``boundary`` is filled, the rest left zero.
+
+    This is the forward companion of :func:`_state_reserve_kernel`: both run
+    the identical edge list, so ``sum_s occ[s, t] * V[s, t] == bel[t]`` holds by
+    construction. It is topology-agnostic -- any Markov state model reduces to
+    this edge list -- and runs only on the opt-in per-state reserve path.
+    """
+    n_edges = edge_from.shape[0]
+    n_mp = start_state.shape[0]
+    occ = np.zeros((n_mp, n_states, n_time + 1))
+    for mp in prange(n_mp):
+        occ[mp, start_state[mp], 0] = count[mp]
+        b = boundary[mp]
+        for t in range(b):
+            year = t // 12
+            for e in range(n_edges):
+                occ[mp, edge_to[e], t + 1] += (
+                    occ[mp, edge_from[e], t] * edge_prob[e, mp, year])
+    return occ
+
+
+@njit(parallel=True, cache=True)
+def _state_reserve_kernel(flow_bom, flow_mid, v_boundary,
+                             edge_from, edge_to, edge_prob,
+                             boundary, discount_monthly):
+    """Per-state policy value ``V^i(t)`` by the Option-A backward recursion.
+
+    For a unit resident in transient state ``j`` at the start of month ``t``
+    (Hoem / Thiele backward recursion over the state space)::
+
+        V[t, j] = flow_bom[j, t]
+                  + flow_mid[j, t] * (1 + i[t])^-0.5
+                  + (sum_{edges (j -> k)} p[e] * V[t+1, k]) * (1 + i[t])^-1
+
+    ``flow_bom`` is the net beginning-of-month per-unit flow (annuity minus
+    premium), ``flow_mid`` the mid-month per-unit outflow (death claim,
+    morbidity, disability income, expense, surrender). The continuation sum runs
+    the SAME compiled edge list as :func:`_forward_occupancy_kernel`, so the
+    exit mass (death / lapse, absent from the edge list) decrements the
+    continuation exactly. Because the aggregate roll-forward
+    (:func:`_roll_forward_kernel`) is the occupancy-weighted sum of these
+    per-state recursions,
+
+        sum_j occ[t, j] * V[t, j] == bel[t]
+
+    holds to floating-point precision. ``v_boundary`` seeds ``V`` at each model
+    point's contract boundary (the maturity benefit per surviving unit); the
+    backward loop then runs from ``boundary - 1`` down to 0.
+
+    Shapes: ``flow_bom`` / ``flow_mid`` are ``(n_mp, n_states, n_time)``,
+    ``v_boundary`` ``(n_mp, n_states)``, the edge arrays ``(n_edges,)`` /
+    ``(n_edges, n_mp, n_year)``, and the returned ``V`` ``(n_mp, n_states,
+    n_time+1)``.
+    """
+    n_edges = edge_from.shape[0]
+    n_mp = flow_bom.shape[0]
+    n_states = flow_bom.shape[1]
+    n_time = flow_bom.shape[2]
+    half = (1.0 + discount_monthly) ** (-0.5)
+    full = 1.0 / (1.0 + discount_monthly)
+    reserve = np.zeros((n_mp, n_states, n_time + 1))
+    for mp in prange(n_mp):
+        b = boundary[mp]
+        for j in range(n_states):
+            reserve[mp, j, b] = v_boundary[mp, j]
+        cont = np.zeros(n_states)
+        for t in range(b - 1, -1, -1):
+            year = t // 12
+            for j in range(n_states):
+                cont[j] = 0.0
+            for e in range(n_edges):
+                cont[edge_from[e]] += (
+                    edge_prob[e, mp, year] * reserve[mp, edge_to[e], t + 1])
+            for j in range(n_states):
+                reserve[mp, j, t] = (
+                    flow_bom[mp, j, t]
+                    + flow_mid[mp, j, t] * half[t]
+                    + cont[j] * full[t])
+    return reserve
+
+
+@njit(parallel=True, cache=True)
 def _csm_kernel(csm0, coverage_units, discount_monthly, discount_units):
     """Compiled CSM roll-forward kernel -- raw numpy arrays only.
 

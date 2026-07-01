@@ -20,7 +20,9 @@ from fastcashflow.curves import (
 )
 from fastcashflow._numerics import (
     _cost_of_capital_ra,
+    _forward_occupancy_kernel,
     _norm_ppf,
+    _state_reserve_kernel,
     _risk_adjustment,
     _roll_forward_kernel,
     _settlement_factor,
@@ -102,6 +104,9 @@ class ValuedProjection:
     discount_factor_mid: FloatArray   # mid-of-month discount factors
     discount_monthly: FloatArray      # per-month discount / CSM-accretion rate curve
     cashflows: Cashflows              # the underlying projection
+    # Opt-in per-state policy value V^i(t), (n_mp, n_states, n_time+1); None
+    # unless valued_projection(..., state_reserve=True) was asked for it.
+    state_reserve: FloatArray | None = None
 
     @property
     def bel(self) -> FloatArray:
@@ -112,9 +117,130 @@ class ValuedProjection:
         return self.ra_path[:, 0]
 
 
+def _safe_div(num: FloatArray, den: FloatArray) -> FloatArray:
+    """Per-unit flow = aggregate flow / its occupancy base, 0 where the base is 0.
+
+    Every aggregate flow this decomposes is zero wherever its occupancy base is
+    (no premium with nobody on a premium state, no income with nobody disabled),
+    so ``0 / 0 -> 0`` loses nothing and avoids a spurious NaN.
+    """
+    return np.divide(num, den, out=np.zeros_like(num), where=den > 0.0)
+
+
+def _state_reserve(model_points: ModelPoints, proj: Cashflows,
+                      mortality_cf: FloatArray, morbidity_cf: FloatArray,
+                      bel_path: FloatArray,
+                      discount_monthly: FloatArray) -> FloatArray:
+    """Per-state policy value ``V^i(t)`` for a Markov book (the opt-in path).
+
+    The aggregate roll-forward (:func:`_roll_forward_kernel`) is a single-life
+    recursion on occupancy-weighted cash flows, so the per-state value satisfies
+    ``sum_i occ_i(t) V^i(t) == bel[t]`` whenever each aggregate flow is split
+    onto its true occupancy base and occupancy evolves by the same transition
+    probabilities. This replays the occupancy from the compiled edge list, splits
+    every flow (premium onto the premium states, the death claim by the
+    per-state death-benefit factor, disability income onto the benefit states,
+    morbidity / expense / surrender / maturity across the in-force pool), and
+    values each state by the backward :func:`_state_reserve_kernel`.
+
+    ``mortality_cf`` / ``morbidity_cf`` are the SETTLEMENT-ADJUSTED claim arrays
+    the caller fed the aggregate roll-forward (not the raw projection claims), so
+    the per-state values reconcile to ``bel_path`` exactly. Markov, no account,
+    no annuity payout, no deterministic premium-term move -- v1 scope; anything
+    else raises. Runs only on the full path (never inside ``value()``).
+    """
+    st = proj.state_trace
+    if st is None:
+        raise NotImplementedError(
+            "state_reserve is supported on the Markov projection path only "
+            "(v1); this portfolio resolves to a semi-Markov state model.")
+    if proj.account is not None:
+        raise NotImplementedError(
+            "state_reserve does not yet support a universal-life account "
+            "book (v1); the per-state value would need to net the account fund.")
+    if st.has_premium_term_move:
+        raise NotImplementedError(
+            "state_reserve does not yet support a deterministic "
+            "at-premium-term transition (active -> paid-up) (v1): the edge-list "
+            "occupancy replay does not carry that calendar move.")
+    if np.any(proj.annuity_cf != 0.0):
+        raise NotImplementedError(
+            "state_reserve does not yet support an annuity payout (v1): a "
+            "survival / guaranteed annuity is not attributable per resident "
+            "unit by the in-force pool split.")
+
+    n_mp, n_time = proj.premium_cf.shape
+    boundary = model_points.contract_boundary_months
+    factor = st.death_benefit_factor            # (n_states,)
+
+    occ = _forward_occupancy_kernel(
+        st.edge_from, st.edge_to, st.edge_prob, st.n_states,
+        st.start_state, st.count, boundary, n_time)   # (n_mp, n_states, n_time+1)
+    occ_t = occ[:, :, :n_time]                         # (n_mp, n_states, n_time)
+
+    # The replayed occupancy must match the projection's own in-force exactly;
+    # a mismatch means an unsupported mechanic moved occupancy off the edge list.
+    inforce_st = occ_t.sum(axis=1)                     # (n_mp, n_time)
+    if not np.allclose(inforce_st, proj.inforce, rtol=1e-9, atol=1e-9):
+        raise NotImplementedError(
+            "state_reserve occupancy replay diverged from the projection "
+            "in-force -- the portfolio uses a mechanic the per-state edge-list "
+            "replay does not carry (v1 supports plain Markov transitions).")
+
+    prem_occ = occ_t[:, st.premium_state, :].sum(axis=1)     # (n_mp, n_time)
+    benefit_occ = occ_t[:, st.benefit_state, :].sum(axis=1)
+    dclaim_occ = (occ_t * factor[None, :, None]).sum(axis=1)
+
+    prem_unit = _safe_div(proj.premium_cf, prem_occ)         # per premium-state unit
+    claim_unit = _safe_div(mortality_cf, dclaim_occ)         # per factor-weighted unit
+    morb_unit = _safe_div(morbidity_cf, inforce_st)          # per in-force unit
+    dis_unit = _safe_div(proj.disability_cf, benefit_occ)    # per benefit-state unit
+    exp_unit = _safe_div(proj.expense_cf, inforce_st)
+    surr_unit = _safe_div(proj.surrender_cf, inforce_st)
+
+    prem_state = st.premium_state[None, :, None]
+    benefit_state = st.benefit_state[None, :, None]
+    # Beginning-of-month per-unit flow: premium is an inflow (reduces the value);
+    # v1 carries no annuity payout, so the BOM leg is premium only.
+    flow_bom = -np.where(prem_state, prem_unit[:, None, :], 0.0)
+    # Mid-month per-unit outflow: death claim (weighted by the state factor),
+    # morbidity + expense + surrender across the pool, disability on the benefit
+    # states. Summed over states weighted by occupancy this reconstructs each
+    # aggregate flow exactly.
+    flow_mid = (factor[None, :, None] * claim_unit[:, None, :]
+                + morb_unit[:, None, :]
+                + np.where(benefit_state, dis_unit[:, None, :], 0.0)
+                + exp_unit[:, None, :]
+                + surr_unit[:, None, :])
+    flow_bom = np.ascontiguousarray(flow_bom)
+    flow_mid = np.ascontiguousarray(flow_mid)
+
+    # Boundary seed: the maturity benefit per surviving unit, uniform across
+    # states (states that cannot reach the boundary hold zero occupancy there).
+    rows = np.arange(n_mp)
+    inforce_b = occ.sum(axis=1)[rows, boundary]              # (n_mp,)
+    mat_unit = _safe_div(proj.maturity_cf, inforce_b)        # (n_mp,)
+    v_boundary = np.ascontiguousarray(
+        np.repeat(mat_unit[:, None], st.n_states, axis=1))   # (n_mp, n_states)
+
+    reserve = _state_reserve_kernel(
+        flow_bom, flow_mid, v_boundary,
+        st.edge_from, st.edge_to, st.edge_prob, boundary, discount_monthly)
+
+    # Belt-and-suspenders: the per-state values must reconcile to bel_path.
+    parity = (occ * reserve).sum(axis=1)                     # (n_mp, n_time+1)
+    if not np.allclose(parity, bel_path, rtol=1e-7,
+                       atol=1e-6 * max(1.0, float(np.abs(bel_path).max()))):
+        raise AssertionError(
+            "state_reserve parity check failed: sum_i occ_i V^i != bel_path "
+            f"(max abs diff {np.max(np.abs(parity - bel_path)):.3e}).")
+    return reserve
+
+
 def valued_projection(model_points: ModelPoints, basis: Basis, *,
                       discount_monthly: FloatArray | None = None,
-                      lapse_scale: FloatArray | None = None) -> ValuedProjection:
+                      lapse_scale: FloatArray | None = None,
+                      state_reserve: bool = False) -> ValuedProjection:
     """Value a cash-flow projection into the neutral BEL / RA bundle.
 
     The model-agnostic core of a full measurement: project the cash flows, then
@@ -129,8 +255,13 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
     discount rate differs. The override is only used by the account path, which
     carries no ``settlement_pattern``, so the settlement factor below (keyed on
     ``basis.discount_monthly``) is never reached together with an override.
+
+    ``state_reserve`` (default ``False``) also computes the per-state policy
+    value ``V^i(t)`` and attaches it to the bundle -- Markov books only (v1); see
+    :func:`_state_reserve`. It leaves every other field byte-identical.
     """
-    proj = project_cashflows(model_points, basis, lapse_scale=lapse_scale)
+    proj = project_cashflows(model_points, basis, lapse_scale=lapse_scale,
+                             emit_state=state_reserve)
     mortality_cf, morbidity_cf = proj.mortality_cf, proj.morbidity_cf
     if discount_monthly is None:
         discount_monthly = discount_monthly_curve(basis, proj.n_time)
@@ -183,6 +314,13 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
             pv_survival_ra = pv_survival - pv_certain
         ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
                               pv_survival_ra, discount_monthly)
+    rbs = None
+    if state_reserve:
+        # The settlement-adjusted claim arrays (mortality_cf / morbidity_cf) are
+        # the ones fed to the roll-forward above, so the per-state values
+        # reconcile to this exact bel.
+        rbs = _state_reserve(model_points, proj, mortality_cf, morbidity_cf,
+                                bel, discount_monthly)
     return ValuedProjection(
         bel_path=bel,
         ra_path=ra,
@@ -191,4 +329,5 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
         discount_factor_mid=discount_factor_mid,
         discount_monthly=discount_monthly,
         cashflows=proj,
+        state_reserve=rbs,
     )

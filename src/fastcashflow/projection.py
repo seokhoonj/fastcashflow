@@ -38,7 +38,7 @@ from dataclasses import dataclass
 import numpy as np
 from numba import njit, prange
 
-from fastcashflow._typing import FloatArray
+from fastcashflow._typing import BoolArray, FloatArray, IntArray
 from fastcashflow.basis import (
     Basis, annual_to_monthly, derive_expense_components, validate_factor,
     SURRENDER_VALUE_BASES,
@@ -99,6 +99,37 @@ class AccountTrajectory:
 
 
 @dataclass(frozen=True, slots=True)
+class StateTrace:
+    """Compiled state-machine handles for the opt-in per-state reserve.
+
+    Attached to :class:`Cashflows` only when ``project_cashflows(...,
+    emit_state=True)`` is asked for it (the per-state reserve path). It carries
+    the exact compiled edge list the projection ran, so a caller can replay the
+    per-state occupancy and value each state without recompiling the model or
+    re-evaluating rates (which would risk diverging from the projection). Markov
+    only -- the semi-Markov path leaves ``Cashflows.state_trace`` ``None``.
+
+    ``edge_prob`` is ``(n_edges, n_mp, n_year)`` -- the transition probability of
+    each edge, constant within a policy year. ``premium_state`` /
+    ``benefit_state`` / ``death_benefit_factor`` are the ``(n_states,)`` per-state
+    flags and the death-benefit multiplier the projection weighted occupancy by.
+    ``has_premium_term_move`` flags a deterministic at-premium-term transition
+    (active -> paid-up): the edge list alone does not carry it, so an edge-only
+    occupancy replay would misplace occupancy -- the per-state reserve rejects it.
+    """
+    edge_from: IntArray
+    edge_to: IntArray
+    edge_prob: FloatArray
+    n_states: int
+    start_state: IntArray
+    count: FloatArray
+    premium_state: BoolArray
+    benefit_state: BoolArray
+    death_benefit_factor: FloatArray
+    has_premium_term_move: bool
+
+
+@dataclass(frozen=True, slots=True)
 class Cashflows:
     """Projected cash flows.
 
@@ -136,6 +167,10 @@ class Cashflows:
     # no model point carries a guarantee period. Used to remove the certain
     # payments from the longevity Risk Adjustment (they bear no longevity risk).
     annuity_certain_cf: "FloatArray | None" = None
+    # Compiled state-machine handles for the opt-in per-state reserve
+    # (project_cashflows(..., emit_state=True)); None on every ordinary
+    # projection and on the semi-Markov path.
+    state_trace: "StateTrace | None" = None
 
     @property
     def n_time(self) -> int:
@@ -1115,7 +1150,8 @@ def _state_lapse_stack(state_model, rate_dict):
 
 
 def project_cashflows(model_points: ModelPoints, basis: Basis,
-                      *, lapse_scale: FloatArray | None = None) -> Cashflows:
+                      *, lapse_scale: FloatArray | None = None,
+                      emit_state: bool = False) -> Cashflows:
     """Project cash flows for every model point.
 
     The Pythonic wrapper: it extracts raw arrays from the inputs and
@@ -1130,6 +1166,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
     account-value moneyness path). It scales the per-state lapse stack before
     the kernel runs, so the hot loop sees only the already-scaled lapse array
     (no per-step callback). ``None`` (the default) leaves the lapse untouched.
+
+    ``emit_state`` (default ``False``) attaches a :class:`StateTrace` to the
+    returned :class:`Cashflows` on the Markov path -- the compiled edge list and
+    per-state flags for the opt-in per-state reserve. It does not change any cash
+    flow the projection returns; the semi-Markov path leaves it ``None``.
     """
     if model_points.term_months.shape[0] == 0:
         raise ValueError(
@@ -1363,6 +1404,9 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
     # The guaranteed (certain) annuity stream -- the Markov kernel sets it; it
     # stays None on the semi-Markov path (which rejects the forms above).
     annuity_certain_cf = None
+    # The opt-in per-state reserve handles -- built on the Markov path below when
+    # emit_state is asked for; left None otherwise (incl. the semi-Markov path).
+    state_trace = None
     if has_account and is_semi_markov(state_model):
         # The account roll is folded into the Markov kernel only (v1). A plain
         # UL contract has no state model, so it routes to the Markov path; a
@@ -1605,6 +1649,24 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             model_points.annuity_guarantee_months,
             n_time,
         )
+        if emit_state:
+            # Per-state reserve handles: the exact compiled edge list (so a
+            # caller replays the same occupancy) plus the per-state flags the
+            # kernel weighted by. state_premium_term_to != -1 marks the
+            # deterministic active -> paid-up move the edge list does not carry.
+            state_trace = StateTrace(
+                edge_from=edge_from,
+                edge_to=edge_to,
+                edge_prob=edge_prob,
+                n_states=n_states,
+                start_state=start_state,
+                count=model_points.count,
+                premium_state=premium_state,
+                benefit_state=benefit_state,
+                death_benefit_factor=state_death_benefit_factor,
+                has_premium_term_move=bool(
+                    np.any(compiled.state_premium_term_to != -1)),
+            )
     # Surrender value -- post-projection compute. ``lapse_flow``
     # is the per-month state-machine lapse exit count (occupancy on each state
     # times that state's own lapse rate), so the surrender follows the actual
@@ -1756,4 +1818,5 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         surrender_cf=surrender_cf,
         account=account,
         annuity_certain_cf=annuity_certain_cf,
+        state_trace=state_trace,
     )

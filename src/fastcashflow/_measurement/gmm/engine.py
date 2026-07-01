@@ -135,6 +135,7 @@ def measure(
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
     segment_by=None,
+    state_reserve: bool = False,
 ) -> Measurement:
     """GMM measurement -- the single entry point.
 
@@ -160,12 +161,27 @@ def measure(
     extra argument; passing ``segment_by`` explicitly overrides. Cost scales with the number of distinct segments, not the
     number of axes. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
     apply to the fast path only.
+
+    ``state_reserve`` (``full=True``, single :class:`Basis`, Markov book)
+    also fills ``Measurement.state_reserve`` -- the per-state policy value
+    ``V^i(t)`` shaped ``(n_mp, n_states, n_time+1)``, with
+    ``sum_i occ_i(t) V^i(t) == bel_path[t]``.
     """
     if not isinstance(basis, (Basis, BasisRouter)):
         raise TypeError(
             "basis must be a Basis or a BasisRouter (from read_basis); got "
             f"{type(basis).__name__}"
         )
+    if state_reserve:
+        if not full:
+            raise ValueError(
+                "state_reserve requires full=True -- the per-state value is a "
+                "trajectory, absent on the headline-only fast path.")
+        if isinstance(basis, BasisRouter):
+            raise NotImplementedError(
+                "state_reserve is supported for a single Basis (v1); a "
+                "per-segment BasisRouter is not yet wired. Measure one segment's "
+                "basis at a time.")
     # A variable annuity payout (a finite annuity_air_annual on an annuitizing
     # row) re-floats the phase-2 income at the realised fund return; only a
     # direct-participation (VFA) discount equals that fund return and makes the
@@ -206,7 +222,8 @@ def measure(
                 "(full=False) only; measure(full=True) runs the trajectory "
                 "kernel on basis.discount_annual"
             )
-        result = _measure_full(model_points, basis)
+        result = _measure_full(model_points, basis,
+                               state_reserve=state_reserve)
     else:
         result = _measure_fast(
             model_points, basis, backend=backend, discount_curve=discount_curve,
