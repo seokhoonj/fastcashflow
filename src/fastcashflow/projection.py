@@ -1121,7 +1121,7 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
                                issue_class_grid, elapsed_grid):
     """Add each state's distinct mortality decrement rate to ``rate_dict``.
 
-    A state may carry its own in-force mortality under ``State.mortality_rate_name``
+    A state may carry its own in-force mortality under ``State.mortality_rate``
     (default ``"mortality"``) -- a post-diagnosis state with elevated death.
     Each distinct non-default name is read from ``basis.state_mortality_annual``
     (a name -> callable dict), falling back to the global ``mortality_annual``
@@ -1129,7 +1129,7 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
     behaviour.
     """
     table = basis.state_mortality_annual or {}
-    for rname in {s.mortality_rate_name for s in state_model.states}:
+    for rname in {s.mortality_rate for s in state_model.states}:
         if rname == "mortality" or rname in rate_dict:
             continue
         mort_fn = table.get(rname) or basis.mortality_annual

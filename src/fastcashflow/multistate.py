@@ -227,7 +227,7 @@ class State:
     other duration-since-entry effects. The default ``0`` keeps the state
     Markov (a single cohort, identical to the pre-Phase-(c) behaviour).
 
-    ``mortality_rate_name`` routes this state's in-force death decrement to a
+    ``mortality_rate`` routes this state's in-force death decrement to a
     named rate (default ``"mortality"``, the global decrement). A
     post-diagnosis state can carry an elevated death rate by naming a
     different rate, supplied via ``Basis.state_mortality_annual``.
@@ -260,7 +260,7 @@ class State:
     transitions: tuple[Transition, ...] = ()
     sojourn_tracking_months: int = 0
     periodic_benefit_term_months: int = 0
-    mortality_rate_name: str = "mortality"
+    mortality_rate: str = "mortality"
     death_benefit_factor: float = 1.0
 
     def __post_init__(self) -> None:
@@ -665,10 +665,10 @@ def compile_model(
                 pt_to = index[tr.to] if tr.to is not None else -2
                 continue
             # A state's mortality decrement is routed to its own rate name
-            # (State.mortality_rate_name, default "mortality") so a post-diagnosis
+            # (State.mortality_rate, default "mortality") so a post-diagnosis
             # state can carry an elevated mortality without re-declaring the
             # transition. Any other rate name passes through unchanged.
-            rname = (state.mortality_rate_name
+            rname = (state.mortality_rate
                      if tr.rate == "mortality" else tr.rate)
             try:
                 rate = arrays[rname]
@@ -840,9 +840,9 @@ def compile_model_with_duration(
         det_lump_list.append(bool(det.pays_lump_sum) if det else False)
         # Validate this state's rate transitions reference rates we have. A
         # "mortality" transition routes to the state's own mortality rate
-        # name (State.mortality_rate_name), so validate the effective name.
+        # name (State.mortality_rate), so validate the effective name.
         for tr in rate_trs:
-            rname = (state.mortality_rate_name
+            rname = (state.mortality_rate
                      if tr.rate == "mortality" else tr.rate)
             if rname not in arrays:
                 raise ValueError(
@@ -875,7 +875,7 @@ def compile_model_with_duration(
             survive = np.ones(grid)
             transient_idx = 0
             for tr in rate_trs:
-                rname = (state.mortality_rate_name
+                rname = (state.mortality_rate
                          if tr.rate == "mortality" else tr.rate)
                 r = rate_at(rname, state, tau)
                 if tr.rate == "mortality" and tau == 0:

@@ -291,7 +291,7 @@ reincidence mult sd6/24/48/72: [0.0, 1.8, 1.2, 0.9]
 재진단까지 생존자가 줄어 재진단금 부채 감소) 이자, 진단 후 월정액 같은 다른
 보장을 평가하는 사망률 가정입니다 (암을 死因으로 하는 **암사망 보험금** 과도
 별개). 진단 상태 (`post_first` / `post_second`) 가 **자기 사망률** 을 갖게 하려면
-`State.mortality_rate_name` 로 다른 이름을 라우팅하고, `Basis.state_mortality_annual`
+`State.mortality_rate` 로 다른 이름을 라우팅하고, `Basis.state_mortality_annual`
 에 그 함수를 줍니다 — in-force 가 진단 후 더 빨리 소멸합니다:
 
 ```python
@@ -303,10 +303,10 @@ pm_model = Model(states=(
     State("healthy", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
         Transition("ci_incidence", to="post_first", pays_lump_sum=True))),
-    State("post_first", sojourn_tracking_months=120, mortality_rate_name="dth_aft_can", transitions=(
+    State("post_first", sojourn_tracking_months=120, mortality_rate="dth_aft_can", transitions=(
         Transition("mortality"), Transition("lapse"),
         Transition("ci_reincidence", to="post_second", pays_lump_sum=True, sojourn_dependent=True))),
-    State("post_second", mortality_rate_name="dth_aft_can", transitions=(
+    State("post_second", mortality_rate="dth_aft_can", transitions=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0, 1, 2))
 pm_basis = fcf.Basis(
@@ -344,7 +344,7 @@ healthy / post-dx monthly mort : 0.00042 / 0.00168
 ```
 
 `post_first` 에 자리 지정한 계약의 사망건수 (`deaths[0]`) 가 **암진단 후 사망률
-0.00168** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate_name` 를 안 주면
+0.00168** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate` 를 안 주면
 전역 `mortality_annual` 로 fallback 하므로, 암진단 후 상승 사망을 의도했다면
 `state_mortality_annual` 에 그 함수를 반드시 넣습니다.
 

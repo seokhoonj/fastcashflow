@@ -60,7 +60,7 @@ _M_LTC = Model(states=(
         Transition("mortality"), Transition("lapse"),
         Transition("waiver_incidence", to="care", pays_lump_sum=True))),
     State("care", pays_periodic_benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
-          mortality_rate_name="dth_care", transitions=(
+          mortality_rate="dth_care", transitions=(
           Transition("mortality"),)),
 ), seating=(0, 1))
 

@@ -157,7 +157,7 @@
 * - 4.3
   - [간병 / 치매 (LTC)](semi-markov/long-term-care)
   - 진단금 일시금 + 보증한도 월정액 (`periodic_benefit_term_months`) + 간병상태 상승
-    사망률 (`State.mortality_rate_name`). 상태지속 정액 보장의 sojourn 한도.
+    사망률 (`State.mortality_rate`). 상태지속 정액 보장의 sojourn 한도.
 :::
 
 ### 5. 계좌형 — 변액 (VFA) · 유니버설

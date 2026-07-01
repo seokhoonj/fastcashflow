@@ -866,9 +866,9 @@ class Basis:
     # contract.
     disability_recovery_annual: DurationRateFn | None = None
     # Per-state in-force mortality decrement, keyed by the rate name a state
-    # declares via ``State.mortality_rate_name`` (default ``"mortality"``). A
+    # declares via ``State.mortality_rate`` (default ``"mortality"``). A
     # post-diagnosis state (post-cancer death) carries an elevated death rate
-    # without re-declaring its transition: ``State(mortality_rate_name="dth_post")``
+    # without re-declaring its transition: ``State(mortality_rate="dth_post")``
     # plus ``state_mortality_annual={"dth_post": fn}``. A name absent from the
     # dict (or a None dict) falls back to the global ``mortality_annual``, so
     # declaring the state without a table preserves behaviour.
@@ -1241,8 +1241,8 @@ def _describe_basis_lines(
             extras = []
             if st.periodic_benefit_term_months:
                 extras.append(f"periodic_benefit_term_months={st.periodic_benefit_term_months}")
-            if st.mortality_rate_name != "mortality":
-                extras.append(f"mortality_rate_name={st.mortality_rate_name!r}")
+            if st.mortality_rate != "mortality":
+                extras.append(f"mortality_rate={st.mortality_rate!r}")
             if st.death_benefit_factor != 1.0:
                 extras.append(f"death_benefit_factor={st.death_benefit_factor}")
             extra_str = (", " + ", ".join(extras)) if extras else ""

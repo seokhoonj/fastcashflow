@@ -7,7 +7,7 @@
   일시금** 한 번 + **월정액** 을 매월 받되, 지급은 **보증한도** 까지만
 - `State.periodic_benefit_term_months` — 월정액의 **sojourn 한도** (예: 36 회 보증 후
   지급 중단, 계약은 유지)
-- `State.mortality_rate_name` — **간병 상태의 상승 사망률** (간병 진입자는 사망률이
+- `State.mortality_rate` — **간병 상태의 상승 사망률** (간병 진입자는 사망률이
   높음); in-force 가 그만큼 빨리 소멸
 - 한 상태가 **일시금 (`disability_benefit`) + 월정액 (`disability_income`)** 을
   함께 다루는 구조 — [4.1](reincidence) 의 일시금, [4.2](disability-income) 의
@@ -30,7 +30,7 @@
 
 또한 간병 상태 진입자는 **사망률이 일반보다 훨씬 높습니다** — in-force 가 빨리
 소멸하므로 월정액 부채도 그만큼 작아집니다. 이 상태별 사망률을
-`State.mortality_rate_name` 로 줍니다.
+`State.mortality_rate` 로 줍니다.
 
 ## 모델링 매핑 — active / care (2-state)
 
@@ -45,9 +45,9 @@
 * - `Transition("waiver_incidence", to="care", pays_lump_sum=True)`
   - 간병 발생 — active -> care. `pays_lump_sum=True` 가 진입 시
     `disability_benefit` (진단금) 를 한 번 지급.
-* - `State("care", pays_periodic_benefit=True, periodic_benefit_term_months=36, mortality_rate_name="dth_care", sojourn_tracking_months=60)`
+* - `State("care", pays_periodic_benefit=True, periodic_benefit_term_months=36, mortality_rate="dth_care", sojourn_tracking_months=60)`
   - 간병 상태. `pays_periodic_benefit=True` 가 매월 `disability_income` 지급,
-    `periodic_benefit_term_months=36` 이 **36 회까지만** 지급. `mortality_rate_name="dth_care"`
+    `periodic_benefit_term_months=36` 이 **36 회까지만** 지급. `mortality_rate="dth_care"`
     가 이 상태의 **상승 사망률** 을 라우팅. `sojourn_tracking_months` 가 sojourn 코호트 추적.
 * - `Basis.state_mortality_annual={"dth_care": fn}`
   - `dth_care` 라는 이름의 사망률 함수. 이름이 없으면 전역 `mortality_annual`
@@ -123,7 +123,7 @@ model = Model(states=(
         Transition("lapse"),
         Transition("waiver_incidence", to="care", pays_lump_sum=True))),  # 진단금 lump
     State("care", pays_periodic_benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
-          mortality_rate_name="dth_care", transitions=(
+          mortality_rate="dth_care", transitions=(
           Transition("mortality"),)),  # 상승 사망률
 ), seating=(0, 1))
 
@@ -256,7 +256,7 @@ BEL       : 3,000,000   (= 3 x 1,000,000, discount 0)
 
 ### 함정 3 — 간병 상태 사망률을 안 주면 전역으로 fallback
 
-`mortality_rate_name="dth_care"` 라고 선언해도 `state_mortality_annual` 에
+`mortality_rate="dth_care"` 라고 선언해도 `state_mortality_annual` 에
 `"dth_care"` 가 없으면 **전역 `mortality_annual`** 로 돌아갑니다 (기본값 보존).
 상승 사망률을 의도했다면 dict 에 그 이름의 함수를 반드시 넣으세요.
 
