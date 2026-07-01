@@ -116,10 +116,23 @@ class StateTrace:
     ``has_premium_term_move`` flags a deterministic at-premium-term transition
     (active -> paid-up): the edge list alone does not carry it, so an edge-only
     occupancy replay would misplace occupancy -- the per-state reserve rejects it.
+
+    ``state_death_exit`` / ``state_lapse`` are the ``(n_states, n_mp, n_year)``
+    per-state absorbing-exit probabilities (death, lapse) -- NOT edges (they leave
+    the in-force set), so the per-state sum-at-risk synthesizes a death / lapse
+    transition for each state whose exit probability is non-zero. ``state_names``
+    labels the transient states for the transition descriptors. ``edge_lump_sum``
+    ``(n_edges,)`` flags the inter-state edges that pay a lump on transition (the
+    ``ModelPoints.disability_benefit`` amount). ``death_face`` ``(n_mp,)`` is the
+    per-unit level death benefit (sum of the plain death-risk coverage amounts);
+    ``has_death_coverage_rules`` flags a rule-bearing death coverage (waiting /
+    reduction / step / escalation / term) whose benefit varies in time -- the
+    sum-at-risk (which assumes a level death benefit) rejects it in v1.
     """
     edge_from: IntArray
     edge_to: IntArray
     edge_prob: FloatArray
+    edge_lump_sum: BoolArray
     n_states: int
     start_state: IntArray
     count: FloatArray
@@ -127,6 +140,11 @@ class StateTrace:
     benefit_state: BoolArray
     death_benefit_factor: FloatArray
     has_premium_term_move: bool
+    state_death_exit: FloatArray
+    state_lapse: FloatArray
+    state_names: tuple[str, ...]
+    death_face: FloatArray
+    has_death_coverage_rules: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -1654,10 +1672,34 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             # caller replays the same occupancy) plus the per-state flags the
             # kernel weighted by. state_premium_term_to != -1 marks the
             # deterministic active -> paid-up move the edge list does not carry.
+            # death_face: the per-unit LEVEL death benefit (sum of the plain
+            # death-risk coverage amounts per policy); rule-bearing death
+            # coverages are flagged so the (level-benefit) sum-at-risk rejects
+            # them. Reuses the projection's own coverage_risk -- no reconstruction.
+            death_face = np.zeros(n_mp)
+            has_death_rules = False
+            ci = model_points.coverage_index
+            if ci is not None and ci.shape[0] > 0:
+                plain_death = ((coverage_risk[ci] == 0)
+                               & ~coverage_is_diagnosis[ci]
+                               & ~coverage_pays_account_balance[ci])
+                mp_of_k = np.repeat(np.arange(n_mp),
+                                    np.diff(model_points.coverage_offset))
+                death_face = np.bincount(
+                    mp_of_k, weights=np.where(plain_death, model_points.coverage_amount, 0.0),
+                    minlength=n_mp)
+                rule_k = plain_death & (
+                    (model_points.coverage_waiting != 0)
+                    | (model_points.coverage_reduction_end != 0)
+                    | (model_points.coverage_step_month != 0)
+                    | (model_points.coverage_escalation_annual != 0.0)
+                    | (model_points.coverage_term != 0))
+                has_death_rules = bool(np.any(rule_k))
             state_trace = StateTrace(
                 edge_from=edge_from,
                 edge_to=edge_to,
                 edge_prob=edge_prob,
+                edge_lump_sum=edge_lump_sum,
                 n_states=n_states,
                 start_state=start_state,
                 count=model_points.count,
@@ -1666,6 +1708,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 death_benefit_factor=state_death_benefit_factor,
                 has_premium_term_move=bool(
                     np.any(compiled.state_premium_term_to != -1)),
+                state_death_exit=state_death_exit,
+                state_lapse=state_lapse,
+                state_names=tuple(s.name for s in state_model.states),
+                death_face=death_face,
+                has_death_coverage_rules=has_death_rules,
             )
     # Surrender value -- post-projection compute. ``lapse_flow``
     # is the per-month state-machine lapse exit count (occupancy on each state

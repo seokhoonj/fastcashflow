@@ -136,6 +136,7 @@ def measure(
     discount_curve: FloatArray | None = None,
     segment_by=None,
     state_reserve: bool = False,
+    sum_at_risk: bool = False,
 ) -> Measurement:
     """GMM measurement -- the single entry point.
 
@@ -165,23 +166,27 @@ def measure(
     ``state_reserve`` (``full=True``, single :class:`Basis`, Markov book)
     also fills ``Measurement.state_reserve`` -- the per-state policy value
     ``V^i(t)`` shaped ``(n_mp, n_states, n_time+1)``, with
-    ``sum_i occ_i(t) V^i(t) == bel_path[t]``.
+    ``sum_i occ_i(t) V^i(t) == bel_path[t]``. ``sum_at_risk`` additionally fills
+    ``Measurement.sum_at_risk`` / ``.transitions`` -- the per-transition net
+    exposure ``S^ij + V^j - V^i`` (death / lapse / inter-state), shaped
+    ``(n_mp, n_transition, n_time+1)``.
     """
     if not isinstance(basis, (Basis, BasisRouter)):
         raise TypeError(
             "basis must be a Basis or a BasisRouter (from read_basis); got "
             f"{type(basis).__name__}"
         )
-    if state_reserve:
+    if state_reserve or sum_at_risk:
+        who = "sum_at_risk" if sum_at_risk else "state_reserve"
         if not full:
             raise ValueError(
-                "state_reserve requires full=True -- the per-state value is a "
-                "trajectory, absent on the headline-only fast path.")
+                f"{who} requires full=True -- the per-state trajectory is absent "
+                "on the headline-only fast path.")
         if isinstance(basis, BasisRouter):
             raise NotImplementedError(
-                "state_reserve is supported for a single Basis (v1); a "
-                "per-segment BasisRouter is not yet wired. Measure one segment's "
-                "basis at a time.")
+                f"{who} is supported for a single Basis (v1); a per-segment "
+                "BasisRouter is not yet wired. Measure one segment's basis at a "
+                "time.")
     # A variable annuity payout (a finite annuity_air_annual on an annuitizing
     # row) re-floats the phase-2 income at the realised fund return; only a
     # direct-participation (VFA) discount equals that fund return and makes the
@@ -223,7 +228,8 @@ def measure(
                 "kernel on basis.discount_annual"
             )
         result = _measure_full(model_points, basis,
-                               state_reserve=state_reserve)
+                               state_reserve=state_reserve,
+                               sum_at_risk=sum_at_risk)
     else:
         result = _measure_fast(
             model_points, basis, backend=backend, discount_curve=discount_curve,

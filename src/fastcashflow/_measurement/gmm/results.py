@@ -74,6 +74,11 @@ class Measurement:
     # measure(..., full=True, state_reserve=True) on a Markov book; None
     # otherwise. sum_i occ_i(t) V^i(t) == bel_path[t]. See fastcashflow.gmm.trace.
     state_reserve: FloatArray | None = None
+    # Per-transition sum at risk S^ij + V^j - V^i, (n_mp, n_transition, n_time+1),
+    # with its transition descriptors -- filled only by measure(..., full=True,
+    # sum_at_risk=True) on a Markov book; None otherwise.
+    sum_at_risk: FloatArray | None = None
+    transitions: "tuple | None" = None
     cashflows: "Cashflows | None" = None
     # bom = beginning of month, mom = mid of month: discount factors for a flow
     # at the start vs the middle of each month. Shape (n_time+1,) / (n_time,)
@@ -740,7 +745,8 @@ def _compute_csm(bel0, ra0, inforce, discount_monthly, discount_units=False):
 def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
                   discount_monthly: FloatArray | None = None,
                   lapse_scale: FloatArray | None = None,
-                  state_reserve: bool = False) -> Measurement:
+                  state_reserve: bool = False,
+                  sum_at_risk: bool = False) -> Measurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
     The shared neutral bundle from :func:`~fastcashflow._measurement.projection.valued_projection`
@@ -755,7 +761,8 @@ def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
     vp = valued_projection(model_points, basis,
                            discount_monthly=discount_monthly,
                            lapse_scale=lapse_scale,
-                           state_reserve=state_reserve)
+                           state_reserve=state_reserve,
+                           sum_at_risk=sum_at_risk)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
         vp.bel, vp.ra, vp.cashflows.inforce, vp.discount_monthly,
         basis.coverage_unit_discount,
@@ -773,6 +780,8 @@ def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
         csm_release=csm_release,
         lic_path=vp.lic_path,
         state_reserve=vp.state_reserve,
+        sum_at_risk=vp.sum_at_risk,
+        transitions=vp.transitions,
         cashflows=vp.cashflows,
         discount_factor_bom=vp.discount_factor_bom,
         discount_factor_mid=vp.discount_factor_mid,

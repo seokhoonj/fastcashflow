@@ -459,6 +459,23 @@ def trace(
                 f"acc={csm_acc[t]:>{_gaw},.2f}  rel={csm_rel[t]:>{_grw},.2f}"
             )
 
+    # ---- sum at risk per transition (Markov books only; skip where unsupported)
+    sar_lines: list[object] = []
+    try:
+        msar = measure(sub, basis, full=True, sum_at_risk=True)
+    except (NotImplementedError, ValueError):
+        msar = None
+    if msar is not None and msar.sum_at_risk is not None:
+        sar = np.asarray(msar.sum_at_risk)          # (1, n_transition, n_time+1)
+        picks_asc = sorted(t for t in picks if t <= sar.shape[2] - 1)
+        sar_lines.append("sum_at_risk[t] = S^ij + V^j - V^i  "
+                         "(net exposure if the transition fires around t)")
+        sar_lines.append("months: " + "  ".join(f"t={t}" for t in picks_asc))
+        for k, tr in enumerate(msar.transitions):
+            vals = "  ".join(f"{sar[0, k, t]:>13,.2f}" for t in picks_asc)
+            arrow = f"{tr.from_name}->{tr.to_name}"
+            sar_lines.append(f"{tr.kind:>8s} {arrow:<22s}: {vals}")
+
     # ---- Final headline
     final_lines: list[object] = [
         f"BEL              = {bel[0]:>15,.2f}",
@@ -494,8 +511,10 @@ def trace(
         ("Discount factors (key months)", disc_lines),
         ("BEL roll-forward (key months)", bel_lines),
         ("CSM roll-forward (key months)", csm_lines),
-        ("Final (headline numbers, per policy)", final_lines),
     ])
+    if sar_lines:
+        tree_items.append(("sum at risk per transition (key months)", sar_lines))
+    tree_items.append(("Final (headline numbers, per policy)", final_lines))
     _emit_tree(tree_items, out, "")
     file.write("\n".join(out) + "\n")
 

@@ -107,6 +107,10 @@ class ValuedProjection:
     # Opt-in per-state policy value V^i(t), (n_mp, n_states, n_time+1); None
     # unless valued_projection(..., state_reserve=True) was asked for it.
     state_reserve: FloatArray | None = None
+    # Opt-in per-transition sum at risk S^ij + V^j - V^i, (n_mp, n_transition,
+    # n_time+1), with its transition descriptors; None unless sum_at_risk=True.
+    sum_at_risk: FloatArray | None = None
+    transitions: "tuple | None" = None
 
     @property
     def bel(self) -> FloatArray:
@@ -234,13 +238,111 @@ def _state_reserve(model_points: ModelPoints, proj: Cashflows,
         raise AssertionError(
             "state_reserve parity check failed: sum_i occ_i V^i != bel_path "
             f"(max abs diff {np.max(np.abs(parity - bel_path)):.3e}).")
-    return reserve
+    return reserve, occ
+
+
+@dataclass(frozen=True, slots=True)
+class TransitionRisk:
+    """Descriptor for one transition on the ``sum_at_risk`` axis.
+
+    ``from_state`` / ``to_state`` are transient-state indices; ``to_state`` is
+    ``None`` for an absorbing exit (death / lapse leave the in-force set).
+    ``kind`` is ``"death"``, ``"lapse"`` or ``"transfer"`` (an inter-state edge).
+    ``from_name`` / ``to_name`` label them for display (``to_name`` is the
+    destination state name, or ``"death"`` / ``"lapse"``).
+    """
+    from_state: int
+    to_state: "int | None"
+    kind: str
+    from_name: str
+    to_name: str
+
+
+def _sum_at_risk(model_points: ModelPoints, proj: Cashflows,
+                 reserve: FloatArray, occ: FloatArray):
+    """Per-transition sum at risk ``S^ij + V^j - V^i`` (Markov book, opt-in).
+
+    The net exposure if a transition fires: the benefit paid on the edge plus the
+    reserve of the destination state minus the reserve released by the source
+    state, all per unit in the source state. Three transition kinds are
+    enumerated per model point:
+
+    * **death** exit from each state with a death decrement -- ``S`` is the death
+      coverage SUM ASSURED per unit (``death_face x death_benefit_factor``),
+      ``V^j = 0`` (death leaves the in-force set), so it is the classic net amount
+      at risk ``sum_assured - V^i``. This is the exposure per death, independent of
+      how often a death fires; it assumes the death coverage insures the modeled
+      in-force death decrement (the usual case, coverage rate = mortality
+      decrement). If a book deliberately decouples the death coverage rate from
+      the in-force decrement, the reported figure is the per-claim sum-assured
+      NAR, not a per-decrement expected loss.
+    * **lapse** exit from each state with a lapse decrement -- ``S`` is the cash
+      surrender value per unit (derived from ``surrender_cf`` over the actual
+      lapse exits), ``V^j = 0``, so ``csv - V^i``.
+    * **transfer** -- each compiled inter-state edge ``i -> j`` -- ``S`` is the
+      transition lump (``disability_benefit`` when the edge pays one, else 0),
+      ``V^j - V^i`` the reserve jump.
+
+    Reserves are taken at the same month ``t`` as the source (``V^i(t)``), so
+    ``sum_at_risk[t]`` reads "if this transition fires around month ``t``". Death
+    / lapse benefits are level in v1; a rule-bearing death coverage is rejected.
+    Returns ``(sum_at_risk (n_mp, n_transition, n_time+1), transitions)``.
+    """
+    st = proj.state_trace
+    if st.has_death_coverage_rules:
+        raise NotImplementedError(
+            "sum_at_risk assumes a level death benefit (v1); this book has a "
+            "rule-bearing death coverage (waiting / reduction / step / "
+            "escalation / term) whose benefit varies in time.")
+    ns = st.n_states
+    n_mp, _, n_timep1 = reserve.shape
+    n_time = n_timep1 - 1
+    occ_t = occ[:, :, :n_time]
+
+    # per-unit death benefit per state = level face x per-state factor
+    death_benefit = st.death_face[:, None] * st.death_benefit_factor[None, :]  # (n_mp, n_states)
+
+    # cash surrender value per unit (t) = surrender_cf / actual lapse exits, so it
+    # reflects exactly what the projection paid (no curve reconstruction).
+    year_idx = np.arange(n_time) // 12
+    lapse_rate = np.transpose(st.state_lapse[:, :, year_idx], (1, 0, 2))  # (n_mp, n_states, n_time)
+    lapse_exits = (occ_t * lapse_rate).sum(axis=1)                        # (n_mp, n_time)
+    csv_unit = _safe_div(proj.surrender_cf, lapse_exits)                  # (n_mp, n_time)
+    csv_pad = np.concatenate([csv_unit, np.zeros((n_mp, 1))], axis=1)     # (n_mp, n_time+1)
+
+    lump = (np.asarray(model_points.disability_benefit, dtype=float)
+            if model_points.disability_benefit is not None else np.zeros(n_mp))
+
+    death_any = st.state_death_exit.any(axis=(1, 2))   # (n_states,)
+    lapse_any = st.state_lapse.any(axis=(1, 2))
+    names = st.state_names
+
+    sar_rows, transitions = [], []
+    for i in range(ns):                                 # death exits
+        if death_any[i]:
+            sar_rows.append(death_benefit[:, i:i + 1] - reserve[:, i, :])
+            transitions.append(TransitionRisk(i, None, "death", names[i], "death"))
+    for i in range(ns):                                 # lapse exits
+        if lapse_any[i]:
+            sar_rows.append(csv_pad - reserve[:, i, :])
+            transitions.append(TransitionRisk(i, None, "lapse", names[i], "lapse"))
+    for e in range(st.edge_from.shape[0]):              # inter-state transfers
+        i, j = int(st.edge_from[e]), int(st.edge_to[e])
+        if i == j:
+            continue
+        s = lump[:, None] if st.edge_lump_sum[e] else 0.0
+        sar_rows.append(s + reserve[:, j, :] - reserve[:, i, :])
+        transitions.append(TransitionRisk(i, j, "transfer", names[i], names[j]))
+
+    sum_at_risk = np.stack(sar_rows, axis=1)            # (n_mp, n_transition, n_time+1)
+    return sum_at_risk, tuple(transitions)
 
 
 def valued_projection(model_points: ModelPoints, basis: Basis, *,
                       discount_monthly: FloatArray | None = None,
                       lapse_scale: FloatArray | None = None,
-                      state_reserve: bool = False) -> ValuedProjection:
+                      state_reserve: bool = False,
+                      sum_at_risk: bool = False) -> ValuedProjection:
     """Value a cash-flow projection into the neutral BEL / RA bundle.
 
     The model-agnostic core of a full measurement: project the cash flows, then
@@ -258,10 +360,13 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
 
     ``state_reserve`` (default ``False``) also computes the per-state policy
     value ``V^i(t)`` and attaches it to the bundle -- Markov books only (v1); see
-    :func:`_state_reserve`. It leaves every other field byte-identical.
+    :func:`_state_reserve`. ``sum_at_risk`` (default ``False``) additionally
+    computes the per-transition sum at risk (and implies ``state_reserve``, which
+    it is built from). Both leave every other field byte-identical.
     """
+    need_state = state_reserve or sum_at_risk
     proj = project_cashflows(model_points, basis, lapse_scale=lapse_scale,
-                             emit_state=state_reserve)
+                             emit_state=need_state)
     mortality_cf, morbidity_cf = proj.mortality_cf, proj.morbidity_cf
     if discount_monthly is None:
         discount_monthly = discount_monthly_curve(basis, proj.n_time)
@@ -314,13 +419,15 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
             pv_survival_ra = pv_survival - pv_certain
         ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
                               pv_survival_ra, discount_monthly)
-    rbs = None
-    if state_reserve:
+    rbs = sar = transitions = None
+    if need_state:
         # The settlement-adjusted claim arrays (mortality_cf / morbidity_cf) are
         # the ones fed to the roll-forward above, so the per-state values
         # reconcile to this exact bel.
-        rbs = _state_reserve(model_points, proj, mortality_cf, morbidity_cf,
-                                bel, discount_monthly)
+        rbs, occ = _state_reserve(model_points, proj, mortality_cf, morbidity_cf,
+                                  bel, discount_monthly)
+        if sum_at_risk:
+            sar, transitions = _sum_at_risk(model_points, proj, rbs, occ)
     return ValuedProjection(
         bel_path=bel,
         ra_path=ra,
@@ -330,4 +437,6 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
         discount_monthly=discount_monthly,
         cashflows=proj,
         state_reserve=rbs,
+        sum_at_risk=sar,
+        transitions=transitions,
     )
