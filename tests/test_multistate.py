@@ -17,7 +17,7 @@ from fastcashflow.multistate import compile_model
 from conftest import annual_from_monthly as _annual
 
 
-def _basis(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Basis:
+def _basis(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_machine=None) -> Basis:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand.
 
     ``q``, ``lapse`` and ``waiver_rate`` are the monthly rates the hand
@@ -38,7 +38,7 @@ def _basis(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Basis:
         discount_annual=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
-        state_model=state_model,
+        state_machine=state_machine,
         coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, q_a)),),
     )
 
@@ -145,7 +145,7 @@ def test_markov_can_reference_ci_incidence_annual():
         discount_annual=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
-        state_model=healthy_to_diag,
+        state_machine=healthy_to_diag,
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, q_a)),),
     )
     mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1_000_000.0},
@@ -180,7 +180,7 @@ def test_explicit_waiver_model_matches_default():
         mp = ModelPoints.single(**kw, state=state,
                                 calculation_methods={"DEATH": CalculationMethod.DEATH})
         default = measure(mp, _basis(waiver_rate=0.03), full=False)
-        custom = measure(mp, _basis(waiver_rate=0.03, state_model=rebuilt), full=False)
+        custom = measure(mp, _basis(waiver_rate=0.03, state_machine=rebuilt), full=False)
         assert np.isclose(default.bel[0], custom.bel[0])
 
 
@@ -195,7 +195,7 @@ def test_single_state_no_lapse_hand_calculation():
     mp = ModelPoints.single(issue_age=40, benefits={"DEATH": death_benefit},
                             premium=premium, term_months=3,
                             calculation_methods={"DEATH": CalculationMethod.DEATH})
-    basis = _basis(state_model=no_lapse)
+    basis = _basis(state_machine=no_lapse)
 
     inforce = [1.0, 0.99, 0.99 ** 2]
     pv_claims = sum(i * 0.01 * death_benefit for i in inforce)
@@ -228,7 +228,7 @@ def test_decrement_order_matters():
     mp = ModelPoints.single(issue_age=40, benefits={"DEATH": death_benefit},
                             premium=premium, term_months=2,
                             calculation_methods={"DEATH": CalculationMethod.DEATH})
-    basis = _basis(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
+    basis = _basis(waiver_rate=0.05, lapse=0.02, state_machine=lapse_first)
 
     # t=0: act=1, wav=0.
     #   act[1] = 1 * 0.99 * 0.98 * 0.95 = 0.92169  (death, lapse, then waiver)
@@ -247,7 +247,7 @@ def test_decrement_order_matters():
     assert not np.isclose(default, bel)
 
 
-def test_three_state_model_runs():
+def test_three_state_machine_runs():
     """A three-state model (active, waiver, paid-up kept as a distinct state)
     runs through both kernels: n_states = 3 flows through the occupancy
     recursion, and the extra paid-up state -- mortality only, no premium --
@@ -273,7 +273,7 @@ def test_three_state_model_runs():
     paidup = ModelPoints.single(**kw, state=STATE_PAIDUP,
                                 calculation_methods={"DEATH": CalculationMethod.DEATH})
     base = measure(paidup, _basis(waiver_rate=0.03), full=False)
-    custom = measure(paidup, _basis(waiver_rate=0.03, state_model=three), full=False)
+    custom = measure(paidup, _basis(waiver_rate=0.03, state_machine=three), full=False)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(base, field)[0], getattr(custom, field)[0])
 
@@ -281,7 +281,7 @@ def test_three_state_model_runs():
     active = ModelPoints.single(**kw, state=STATE_ACTIVE,
                                 calculation_methods={"DEATH": CalculationMethod.DEATH})
     assert np.isclose(measure(active, _basis(waiver_rate=0.03), full=False).bel[0],
-                      measure(active, _basis(waiver_rate=0.03, state_model=three), full=False).bel[0])
+                      measure(active, _basis(waiver_rate=0.03, state_machine=three), full=False).bel[0])
 
 
 def test_paidup_state_uses_its_own_lapse():
@@ -298,7 +298,7 @@ def test_paidup_state_uses_its_own_lapse():
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH",
                                 lambda s, a, d: np.full(a.shape, q)),),
-        state_model=Model.from_preset("ACTIVE_WAIVER_PAIDUP"),
+        state_machine=Model.from_preset("ACTIVE_WAIVER_PAIDUP"),
     )
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
@@ -316,7 +316,7 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     falls back to lapse_annual -- the WAIVER_PAIDUP model still runs, the
     paid-up state just lapses at the ordinary rate."""
     basis = _basis(q=0.01, lapse=0.05,
-                 state_model=Model.from_preset("ACTIVE_WAIVER_PAIDUP"))
+                 state_machine=Model.from_preset("ACTIVE_WAIVER_PAIDUP"))
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
               calculation_methods={"DEATH": CalculationMethod.DEATH})
@@ -338,7 +338,7 @@ def test_waiver_state_uses_its_own_lapse():
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH",
                                 lambda s, a, d: np.full(a.shape, q)),),
-        state_model=Model.from_preset("ACTIVE_WAIVER"),
+        state_machine=Model.from_preset("ACTIVE_WAIVER"),
     )
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
@@ -352,7 +352,7 @@ def test_waiver_lapse_defaults_to_zero():
     """With lapse_waiver_annual unset the waiver state does NOT lapse -- it
     decays by mortality alone (the pure-waiver default, backward-compatible
     with the model before lapse_waiver existed)."""
-    basis = _basis(q=0.01, lapse=0.05, state_model=Model.from_preset("ACTIVE_WAIVER"))
+    basis = _basis(q=0.01, lapse=0.05, state_machine=Model.from_preset("ACTIVE_WAIVER"))
     kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
               term_months=3,
               calculation_methods={"DEATH": CalculationMethod.DEATH})
@@ -386,7 +386,7 @@ def test_measure_and_value_agree_under_custom_model():
         state=rng.integers(0, 3, n),
         calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
-    basis = _basis(waiver_rate=0.03, state_model=three)
+    basis = _basis(waiver_rate=0.03, state_machine=three)
     assert np.allclose(measure(mps, basis).bel_path[:, 0], measure(mps, basis, full=False).bel)
 
 
@@ -407,7 +407,7 @@ def test_deaths_respect_within_month_competing_risk_order():
     def _project(model):
         basis = Basis(mortality_annual=death, lapse_annual=lapse,
                       discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
-                      state_model=model, coverages=(CoverageRate("DEATH", death),))
+                      state_machine=model, coverages=(CoverageRate("DEATH", death),))
         mp = ModelPoints(issue_age=np.array([40], dtype=np.int64),
                          benefits={"DEATH": np.array([0.0])}, premium=np.array([0.0]),
                          term_months=np.array([3], dtype=np.int64),
@@ -437,11 +437,11 @@ def test_needs_state_machine_predicate():
     def mp(state):
         return SimpleNamespace(state=np.array(state, dtype=np.int64))
 
-    def basis(state_model=None, waiver=None):
-        return SimpleNamespace(state_model=state_model, waiver_incidence_annual=waiver)
+    def basis(state_machine=None, waiver=None):
+        return SimpleNamespace(state_machine=state_machine, waiver_incidence_annual=waiver)
 
     assert needs_state_machine(mp([0, 0]), basis()) is False           # plain -> scalar
-    assert needs_state_machine(mp([0, 0]), basis(state_model=Model.from_preset("ACTIVE_WAIVER"))) is True
+    assert needs_state_machine(mp([0, 0]), basis(state_machine=Model.from_preset("ACTIVE_WAIVER"))) is True
     assert needs_state_machine(mp([0, 0]), basis(waiver=lambda *a: 0.0)) is True
     assert needs_state_machine(mp([0, 1]), basis()) is True            # seated outside active
 
@@ -451,7 +451,7 @@ def test_needs_state_machine_predicate():
 # ---------------------------------------------------------------------------
 
 def _paidup_basis(*, active_lapse, paidup_lapse, waiver_lapse=0.0,
-                  waiver_rate=0.0, q=0.001, state_model=None):
+                  waiver_rate=0.0, q=0.001, state_machine=None):
     """WAIVER_PAIDUP basis with distinct active / paid-up / waiver lapse, flat
     monthly rates (each supplied as the annual the engine converts back)."""
     return Basis(
@@ -463,7 +463,7 @@ def _paidup_basis(*, active_lapse, paidup_lapse, waiver_lapse=0.0,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("CA",
                                 lambda s, a, d: np.full(a.shape, _annual(0.002))),),
-        state_model=state_model or Model.from_preset("ACTIVE_WAIVER_PAIDUP"),
+        state_machine=state_machine or Model.from_preset("ACTIVE_WAIVER_PAIDUP"),
     )
 
 
@@ -545,7 +545,7 @@ def test_premium_term_switch_two_state_uniform_pp_pup():
     ), seating=(0, 1, 1))
     PT, TERM = 24, 60
     pp, pup = 0.01, 0.05
-    basis = _paidup_basis(active_lapse=pp, paidup_lapse=pup, state_model=model)
+    basis = _paidup_basis(active_lapse=pp, paidup_lapse=pup, state_machine=model)
     mp = ModelPoints.single(issue_age=40, premium=10_000.0, term_months=TERM,
                             premium_term_months=PT, state=STATE_ACTIVE,
                             benefits={"CA": 1_000_000.0},
@@ -572,7 +572,7 @@ def test_at_premium_term_self_destination_is_noop():
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("CA",
                                 lambda s, a, d: np.full(a.shape, _annual(0.002))),),
-        state_model=model)
+        state_machine=model)
     mp = ModelPoints.single(issue_age=40, premium=10_000.0, term_months=60,
                             premium_term_months=24, state=STATE_ACTIVE,
                             benefits={"CA": 1_000_000.0},
@@ -598,7 +598,7 @@ def test_at_premium_term_chain_uses_snapshot_no_cascade():
         State("final", pays_premium=False, transitions=(
             Transition("mortality"),)),
     ), seating=(0, 1, 2))
-    basis = _paidup_basis(active_lapse=0.01, paidup_lapse=0.05, state_model=model)
+    basis = _paidup_basis(active_lapse=0.01, paidup_lapse=0.05, state_machine=model)
     mp = ModelPoints.single(issue_age=40, premium=10_000.0, term_months=60,
                             premium_term_months=24, state=STATE_ACTIVE,
                             benefits={"CA": 1_000_000.0},
@@ -623,7 +623,7 @@ def test_at_premium_term_fused_matches_detailed():
         lapse_waiver_annual=basis.lapse_waiver_annual,
         waiver_incidence_annual=basis.waiver_incidence_annual,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
-        coverages=basis.coverages, state_model=Model.from_preset("ACTIVE_WAIVER_PAIDUP"))
+        coverages=basis.coverages, state_machine=Model.from_preset("ACTIVE_WAIVER_PAIDUP"))
     mp = ModelPoints.single(issue_age=40, premium=10_000.0, term_months=60,
                             premium_term_months=24, state=STATE_ACTIVE,
                             benefits={"CA": 1_000_000.0},

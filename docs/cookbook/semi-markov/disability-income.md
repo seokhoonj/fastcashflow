@@ -160,7 +160,7 @@ basis = fcf.Basis(
     ra_confidence              = 0.75,            # 위험조정 신뢰수준 75%
     mortality_cv               = 0.10,            # 사망률 변동계수 10%
     disability_cv              = 0.20,            # 장해율 변동계수 20%
-    state_model                = model,           # 직접 조립한 Semi-Markov 모델
+    state_machine                = model,           # 직접 조립한 Semi-Markov 모델
     coverages                  = (
         fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종
     ),

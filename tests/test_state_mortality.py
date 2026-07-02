@@ -42,7 +42,7 @@ def _basis(post_rate_name, state_mort=None):
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         state_mortality_annual=state_mort,
-        state_model=_two_state(post_rate_name),
+        state_machine=_two_state(post_rate_name),
         coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
 
 
@@ -92,7 +92,7 @@ def test_state_mortality_detailed_matches_fused():
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         state_mortality_annual={"dth_post": _FLAT(0.30)},
-        state_model=_two_state("dth_post"),
+        state_machine=_two_state("dth_post"),
         coverages=(fcf.CoverageRate("DEATH", _FLAT(0.30)),))
     detailed = fcf.gmm.measure(mp, basis, full=True)
     fused = fcf.gmm.measure(mp, basis, full=False)
@@ -129,7 +129,7 @@ def test_state_mortality_and_benefit_cap_compose():
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         state_mortality_annual={"dth_dis": _FLAT(0.20)},
-        state_model=model,
+        state_machine=model,
         coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
     mp = ModelPoints(
         issue_age=np.array([55], dtype=np.int64),

@@ -5,7 +5,7 @@
 
 - 보험료 납입면제가 **상태 전이** (active → waiver) 로 모델링되는 이유 —
   cookbook 의 첫 상태(Markov) 챕터
-- `state_model` 과 `waiver_incidence_annual` 두 자리의 연결
+- `state_machine` 과 `waiver_incidence_annual` 두 자리의 연결
 - waiver 상태에서 바뀌는 것 — **보험료는 멈추고 보장은 계속**
 - 납입면제가 BEL을 어떻게 키우는지 (보험료 수입이 면제되니 부채 증가)
 :::
@@ -38,7 +38,7 @@
 
 * - 자리
   - 무엇
-* - `Basis.state_model`
+* - `Basis.state_machine`
   - `Model.from_preset("ACTIVE_WAIVER")` — active / waiver 2-state 모델
 * - `Basis.waiver_incidence_annual`
   - active → waiver 연 전이율 callable `(sex, issue_age, duration)`
@@ -102,7 +102,7 @@ basis = fcf.Basis(
     discount_annual         = 0.0,                     # 연 할인율 0 (검증 단순화)
     ra_confidence           = 0.75,                    # 위험조정 신뢰수준 75%
     mortality_cv            = 0.10,                    # 사망률 변동계수 10%
-    state_model             = Model.from_preset("ACTIVE_WAIVER"),  # 2-state: active / waiver
+    state_machine             = Model.from_preset("ACTIVE_WAIVER"),  # 2-state: active / waiver
     coverages               = (
         fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종 (청구 rate = death_rate)
     ),
@@ -200,11 +200,11 @@ BEL        = 285.22
 
 ## 함정
 
-### 함정 1 — `state_model` 을 설정하지 않은 경우
+### 함정 1 — `state_machine` 을 설정하지 않은 경우
 
-`waiver_incidence_annual` 만 넣고 `state_model` 을 생략하면 엔진이
+`waiver_incidence_annual` 만 넣고 `state_machine` 을 생략하면 엔진이
 `ACTIVE_WAIVER_MODEL` 을 암묵적으로 적용합니다. 동작은 같지만, **명시적으로
-`state_model = Model.from_preset("ACTIVE_WAIVER")` 를 설정하는 것** 이 의도를 드러내고
+`state_machine = Model.from_preset("ACTIVE_WAIVER")` 를 설정하는 것** 이 의도를 드러내고
 다른 state 모델로 바꿀 때 한 자리만 고치면 되는 안전한 패턴입니다.
 
 ### 함정 2 — 시작 상태를 안 줌

@@ -1681,21 +1681,21 @@ def _measure_fast(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
         # In-force state machine -- see ``multistate.resolve_model``
-        # for the fallback policy when ``basis.state_model`` is unset.
+        # for the fallback policy when ``basis.state_machine`` is unset.
         # The transition rates land on the sex x age x duration grid the
         # kernel indexes.
-        state_model = resolve_model(basis)
-        semi_markov = is_semi_markov(state_model)
+        state_machine = resolve_model(basis)
+        semi_markov = is_semi_markov(state_machine)
         if semi_markov:
             # Phase (c) path -- a state declared ``sojourn_tracking_months > 0`` tracks
             # per-cohort occupancy. The rate dict carries one entry per name
             # the model references; duration-dependent rates land here as
             # 4D arrays (sex, age, year, cohort), static rates as 3D.
-            max_cohort = max(s.sojourn_tracking_months for s in state_model.states
+            max_cohort = max(s.sojourn_tracking_months for s in state_machine.states
                               if s.sojourn_tracking_months > 0)
             rate_dict = {"mortality": mortality_grid,
                           "lapse": lapse_grid}
-            _add_state_mortality_rates(rate_dict, state_model, basis,
+            _add_state_mortality_rates(rate_dict, state_machine, basis,
                                        sex_grid, issue_age_grid, duration_grid,
                                        issue_class_grid, elapsed_grid)
             if basis.waiver_incidence_annual is not None:
@@ -1741,9 +1741,9 @@ def _measure_fast(
                             basis.disability_recovery_annual(
                                 sg4, ag4, dg4, ic4, cg4)))
             compiled = compile_model_with_duration(
-                state_model, rate_dict,
+                state_machine, rate_dict,
             )
-            state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
+            state_lapse_grid = _state_lapse_stack(state_machine, rate_dict)
             edge_from = compiled.edge_from
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum
@@ -1771,7 +1771,7 @@ def _measure_fast(
             rate_dict = {"mortality": mortality_grid,
                          "waiver_incidence": waiver_grid,
                          "lapse": lapse_grid}
-            _add_state_mortality_rates(rate_dict, state_model, basis,
+            _add_state_mortality_rates(rate_dict, state_machine, basis,
                                        sex_grid, issue_age_grid, duration_grid,
                                        issue_class_grid, elapsed_grid)
             if basis.ci_incidence_annual is not None:
@@ -1780,14 +1780,14 @@ def _measure_fast(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
                 rate_dict["ci_incidence"] = ci_inc_grid
-            if model_references_rate(state_model, "lapse_paidup"):
+            if model_references_rate(state_machine, "lapse_paidup"):
                 paidup_fn = (basis.lapse_paidup_annual
                              or basis.lapse_annual)
                 rate_dict["lapse_paidup"] = np.ascontiguousarray(
                     annual_to_monthly(paidup_fn(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
-            if model_references_rate(state_model, "lapse_waiver"):
+            if model_references_rate(state_machine, "lapse_waiver"):
                 # Waiver state defaults to NO lapse (rate 0) -- the pure-waiver
                 # behaviour -- unless lapse_waiver_annual is set (see the same
                 # block in projection.project_cashflows).
@@ -1798,8 +1798,8 @@ def _measure_fast(
                         annual_to_monthly(basis.lapse_waiver_annual(
                             sex_grid, issue_age_grid, duration_grid,
                             issue_class_grid, elapsed_grid)))
-            compiled = compile_model(state_model, rate_dict)
-            state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
+            compiled = compile_model(state_machine, rate_dict)
+            state_lapse_grid = _state_lapse_stack(state_machine, rate_dict)
             edge_from = compiled.edge_from
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum
@@ -1814,13 +1814,13 @@ def _measure_fast(
             edge_prob = np.ascontiguousarray(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
-        seating = np.asarray(state_model.seating, np.int64)
+        seating = np.asarray(state_machine.seating, np.int64)
         if model_points.state.size and int(model_points.state.max()) >= seating.shape[0]:
             raise ValueError(
                 f"ModelPoints.state has value {int(model_points.state.max())} but "
                 f"the resolved state model accepts only {seating.shape[0]} seating "
                 f"states (valid 0..{seating.shape[0] - 1}); check the state column "
-                "against the segment's state_model")
+                "against the segment's state_machine")
         start_state = seating[model_points.state]
     # Align the basis' coverages to the order the model points were
     # built against (the one place the basis enter the coverage

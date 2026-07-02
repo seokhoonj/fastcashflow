@@ -140,29 +140,29 @@ def test_resolved_basis_values():
 
 
 # ---------------------------------------------------------------------------
-# state_model column + Model.from_preset registry (U+W)
+# state_machine column + Model.from_preset registry (U+W)
 # ---------------------------------------------------------------------------
 
 
-def test_state_model_column_resolves_to_registry_entry():
+def test_state_machine_column_resolves_to_registry_entry():
     """The sample workbook's ``_DEFAULTS`` row carries
-    ``state_model = ACTIVE_WAIVER`` -- both segments inherit and resolve to
+    ``state_machine = ACTIVE_WAIVER`` -- both segments inherit and resolve to
     ``Model.from_preset("ACTIVE_WAIVER")``.
     """
     basis = fcf.samples.basis()
     for basis in basis.segments.values():
-        assert basis.state_model is Model.from_preset("ACTIVE_WAIVER")
+        assert basis.state_machine is Model.from_preset("ACTIVE_WAIVER")
 
 
-def test_state_model_column_blank_keeps_none():
-    """A segment row with a blank ``state_model`` cell falls back to the
-    defaults row; an empty defaults cell leaves ``Basis.state_model``
+def test_state_machine_column_blank_keeps_none():
+    """A segment row with a blank ``state_machine`` cell falls back to the
+    defaults row; an empty defaults cell leaves ``Basis.state_machine``
     as ``None`` (matching the engine's pre-registry behaviour).
     """
     import openpyxl, tempfile, shutil
     import importlib.resources as resources
     from fastcashflow import read_basis
-    # Copy the sample workbook and clear the defaults row's state_model.
+    # Copy the sample workbook and clear the defaults row's state_machine.
     sample = resources.files("fastcashflow").joinpath(
         "sample_data/sample_basis.xlsx")
     with tempfile.TemporaryDirectory() as d:
@@ -172,18 +172,18 @@ def test_state_model_column_blank_keeps_none():
         ws = wb["segments"]
         col = None
         for c in range(1, ws.max_column + 1):
-            if ws.cell(row=1, column=c).value == "state_model":
+            if ws.cell(row=1, column=c).value == "state_machine":
                 col = c; break
         for r in range(2, ws.max_row + 1):
             ws.cell(row=r, column=col).value = None
         wb.save(dst)
         basis = read_basis(dst)
         for basis in basis.segments.values():
-            assert basis.state_model is None
+            assert basis.state_machine is None
 
 
-def test_state_model_unknown_key_raises():
-    """An unrecognised state_model key is rejected at read time, with a
+def test_state_machine_unknown_key_raises():
+    """An unrecognised state_machine key is rejected at read time, with a
     hint listing the registry contents."""
     import openpyxl, tempfile, shutil, pytest
     import importlib.resources as resources
@@ -196,7 +196,7 @@ def test_state_model_unknown_key_raises():
         wb = openpyxl.load_workbook(dst)
         ws = wb["segments"]
         for c in range(1, ws.max_column + 1):
-            if ws.cell(row=1, column=c).value == "state_model":
+            if ws.cell(row=1, column=c).value == "state_machine":
                 ws.cell(row=2, column=c).value = "NOT_A_MODEL"
                 break
         wb.save(dst)

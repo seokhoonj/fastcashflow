@@ -61,7 +61,7 @@ def _disability_case(onset=0.01, income=1000.0, lapse=0.05):
         ra_confidence=0.75,
         mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", q),),
-        state_model=DISABILITY,
+        state_machine=DISABILITY,
         ci_incidence_annual=onset,
     )
     return mp, basis
@@ -158,7 +158,7 @@ def test_state_reserve_rejects_account_book():
 def test_state_reserve_plain_term_contract():
     """A plain term contract (default state model) still reconciles to bel_path.
 
-    With no state_model the engine uses its default active / paid-up tracks; the
+    With no state_machine the engine uses its default active / paid-up tracks; the
     paid-up track stays empty here, so the whole liability sits on the active
     state and the occupancy-weighted per-state value still equals bel_path.
     """

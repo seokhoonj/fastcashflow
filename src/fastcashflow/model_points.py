@@ -412,7 +412,7 @@ class ModelPoints:
         if np.any(state < 0):
             raise ValueError(
                 "state must be >= 0 (a state index; the valid upper bound is "
-                "the Basis state_model's state count, checked at measurement)")
+                "the Basis state_machine's state count, checked at measurement)")
         object.__setattr__(self, "state", state)
         # issue_class defaults to 0 for every model point -- the conventional
         # 'no class distinction' fallback. Rate tables without an issue_class

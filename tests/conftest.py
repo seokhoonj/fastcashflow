@@ -62,7 +62,7 @@ def make_death_basis(
     ``mortality_annual`` / ``lapse_annual`` (full callables). The DEATH
     coverage's rate is wired from the same callable as ``mortality_annual``;
     pass ``coverages=...`` to override that auto-wire (multi-coverage cases).
-    Any extra keyword (waiver_incidence_annual, state_model, fund_fee,
+    Any extra keyword (waiver_incidence_annual, state_machine, fund_fee,
     investment_return, ...) is forwarded to Basis.
     """
     if mortality_annual is None:

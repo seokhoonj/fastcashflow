@@ -58,7 +58,7 @@ def _basis(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
         disability_cv=disability_cv,
-        state_model=_disability_model(pays_lump_sum=pays_lump_sum),
+        state_machine=_disability_model(pays_lump_sum=pays_lump_sum),
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(a.shape, _annual(q))),),
     )
 
@@ -126,7 +126,7 @@ def test_disability_income_needs_a_benefit_state():
     kw = dict(issue_age=45, benefits={"DEATH": 0.0}, premium=0.0,
               calculation_methods={"DEATH": CalculationMethod.DEATH},
               term_months=12, disability_income=500_000.0, state=STATE_WAIVER)
-    # default model (no state_model) -- waiver state is not a benefit state
+    # default model (no state_machine) -- waiver state is not a benefit state
     plain = Basis(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, 0.0),

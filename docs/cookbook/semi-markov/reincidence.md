@@ -158,7 +158,7 @@ basis = fcf.Basis(
     discount_annual       = 0.0,             # 연 할인율 0 (검증 단순화)
     ra_confidence         = 0.75,            # 위험조정 신뢰수준 75%
     mortality_cv          = 0.10,            # 사망률 변동계수 10%
-    state_model           = model,           # 직접 조립한 Semi-Markov 모델
+    state_machine           = model,           # 직접 조립한 Semi-Markov 모델
     coverages             = (
         fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종
     ),
@@ -319,7 +319,7 @@ pm_basis = fcf.Basis(
     ra_confidence=0.75,                                      # 위험조정 신뢰수준
     mortality_cv=0.10,                                       # 사망 변동계수
     morbidity_cv=0.15,                                       # 발생 변동계수
-    state_model=pm_model,                                    # 상태기계
+    state_machine=pm_model,                                    # 상태기계
     coverages=(fcf.CoverageRate("CANCER1", ca_incidence),),  # 1차 암 진단 담보
 )
 

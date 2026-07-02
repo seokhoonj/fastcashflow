@@ -106,14 +106,14 @@ def test_surrender_scales_linearly_in_count():
     assert np.isclose(ratio, 10.0)
 
 
-def test_value_state_model_matches_measure_with_surrender():
+def test_value_state_machine_matches_measure_with_surrender():
     """Markov codegen path (ACTIVE_WAIVER_MODEL) -- measure() must agree with
     measure() once surrender is on."""
     n_time = 240
     curve = np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0)
     basis = _basis(
         surrender_value_curve=curve,
-        state_model=Model.from_preset("ACTIVE_WAIVER"),
+        state_machine=Model.from_preset("ACTIVE_WAIVER"),
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp()
@@ -143,7 +143,7 @@ def test_value_scalar_matches_measure_amount_per_policy():
     assert np.isclose(v.bel[0], m.bel_path[0, 0])
 
 
-def test_value_state_model_matches_measure_amount_per_policy():
+def test_value_state_machine_matches_measure_amount_per_policy():
     """Markov codegen path (WAIVER) -- amount_per_policy must match the full
     projection. The codegen kernel branches on the baked surrender mode, so
     this pins that the amount form is generated correctly."""
@@ -151,7 +151,7 @@ def test_value_state_model_matches_measure_amount_per_policy():
     basis = _basis(
         surrender_value_curve=_amount_curve(n_time),
         surrender_value_basis="amount_per_policy",
-        state_model=Model.from_preset("ACTIVE_WAIVER"),
+        state_machine=Model.from_preset("ACTIVE_WAIVER"),
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp()
@@ -187,7 +187,7 @@ def test_value_scalar_matches_measure_amount_per_unit():
     assert np.isclose(v.bel[0], m.bel_path[0, 0])
 
 
-def test_value_state_model_matches_measure_amount_per_unit():
+def test_value_state_machine_matches_measure_amount_per_unit():
     """Markov codegen path (WAIVER) -- amount_per_unit must match the full
     projection. Pins that the per-MP base array reaches the codegen kernel."""
     n_time = 240
@@ -195,7 +195,7 @@ def test_value_state_model_matches_measure_amount_per_unit():
     basis = _basis(
         surrender_value_curve=curve,
         surrender_value_basis="amount_per_unit",
-        state_model=Model.from_preset("ACTIVE_WAIVER"),
+        state_machine=Model.from_preset("ACTIVE_WAIVER"),
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp_with_base(n_time, 100_000.0)
@@ -228,7 +228,7 @@ def test_paidup_surrender_uses_lapse_paidup_not_global_lapse():
         lapse_paidup_annual = lambda s, a, d: np.full(np.shape(d), 0.01),  # paid-up 1%
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         surrender_value_curve=np.full(n, V), surrender_value_basis="amount_per_policy",
-        state_model=paidup, coverages=(CoverageRate("DEATH", zero),))
+        state_machine=paidup, coverages=(CoverageRate("DEATH", zero),))
     mp = ModelPoints(
         issue_age=np.array([40], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]), term_months=np.array([n], dtype=np.int64),
@@ -255,7 +255,7 @@ def test_waiver_state_is_not_surrendered():
         waiver_incidence_annual = lambda s, a, d: np.full(np.shape(a), 0.30),  # heavy -> waiver
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         surrender_value_curve=np.full(n, V), surrender_value_basis="amount_per_policy",
-        state_model=Model.from_preset("ACTIVE_WAIVER"), coverages=(CoverageRate("DEATH", zero),))
+        state_machine=Model.from_preset("ACTIVE_WAIVER"), coverages=(CoverageRate("DEATH", zero),))
     mp = ModelPoints(
         issue_age=np.array([40], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
         premium=np.array([1000.0]), term_months=np.array([n], dtype=np.int64),

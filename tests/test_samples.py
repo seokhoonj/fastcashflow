@@ -219,7 +219,7 @@ def test_describe_basis_renders_both_shapes(capsys):
     out_one = capsys.readouterr().out
     assert out_one.startswith("Basis")
     assert "State transition rates" in out_one
-    assert "state_model" in out_one
+    assert "state_machine" in out_one
     assert "coverages" in out_one
 
     fcf.describe_basis(basis_dict)

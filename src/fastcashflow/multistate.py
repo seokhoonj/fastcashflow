@@ -445,7 +445,7 @@ class Model:
         """Return the bundled model registered under ``name``.
 
         A non-programmer actuary can pick a topology by name -- in the
-        ``segments`` sheet's ``state_model`` column, or in Python via
+        ``segments`` sheet's ``state_machine`` column, or in Python via
         ``Model.from_preset("ACTIVE_WAIVER")``. The preset key lists the
         transient states in state-index order (``ACTIVE_WAIVER`` = active +
         waiver; ``ACTIVE_WAIVER_PAIDUP`` = active + waiver + paid-up). Users
@@ -537,7 +537,7 @@ ACTIVE_WAIVER_PAIDUP_MODEL = Model(
 
 # Named registry of bundled models, reached through :meth:`Model.from_preset`.
 # A non-programmer actuary can pick a topology by name -- in the ``segments``
-# sheet's ``state_model`` column, or in Python via
+# sheet's ``state_machine`` column, or in Python via
 # ``Model.from_preset("ACTIVE_WAIVER")``. Additions land here as
 # fixed-vocabulary entries -- the same convention as the coverage
 # CalculationMethods; users with a topology outside the registry still build
@@ -578,12 +578,12 @@ def is_semi_markov(model: Model) -> bool:
 def resolve_model(basis) -> "Model":
     """Return the Model driving the projection for these basis.
 
-    Uses the caller-supplied ``basis.state_model`` when set, and falls
+    Uses the caller-supplied ``basis.state_machine`` when set, and falls
     back to the bundled :data:`ACTIVE_WAIVER_MODEL` -- the most common Korean
     protection topology, active / waiver. Centralising the fallback keeps the
     engine and the projection layer from drifting.
     """
-    return basis.state_model or ACTIVE_WAIVER_MODEL
+    return basis.state_machine or ACTIVE_WAIVER_MODEL
 
 
 def needs_state_machine(model_points, basis) -> bool:
@@ -598,7 +598,7 @@ def needs_state_machine(model_points, basis) -> bool:
     ``engine._measure_fast`` so the routing decision is one named, testable
     predicate -- the seed of the planned portfolio-orchestrator classifier.
     """
-    return (basis.state_model is not None
+    return (basis.state_machine is not None
             or basis.waiver_incidence_annual is not None
             or bool(np.any(model_points.state)))
 

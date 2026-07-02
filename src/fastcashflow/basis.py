@@ -756,7 +756,7 @@ class Basis:
         recurring claim -- lives on the portfolio
         (:attr:`fastcashflow.model_points.ModelPoints.calculation_methods`),
         not here.
-    state_model :
+    state_machine :
         The product's in-force state machine -- a :class:`~fastcashflow.multistate.Model`
         declaring the transient states, their transitions and which states
         pay premium or a benefit. ``None`` uses the default active / waiver
@@ -905,7 +905,7 @@ class Basis:
     premium_load: float = 0.0
     settlement_pattern: FloatArray | None = None
     coverages: tuple[CoverageRate, ...] = ()
-    state_model: Model | None = None
+    state_machine: Model | None = None
 
     def __post_init__(self) -> None:
         # Reject obviously-wrong scalar basis fields at construction time.
@@ -1224,7 +1224,7 @@ def _describe_basis_lines(
         (f"coverages : tuple  (len={len(coverages)})", coverage_lines),
     ]))
 
-    sm = basis.state_model
+    sm = basis.state_machine
     if sm is None:
         sm_body: list[object] = ["None"]
     else:
@@ -1252,7 +1252,7 @@ def _describe_basis_lines(
                 trs,
             ))
         sm_body = [(f"states : tuple  (len={len(sm.states)})", state_items)]
-    sections.append((f"{marks[4]} state_model : Model", sm_body))
+    sections.append((f"{marks[4]} state_machine : Model", sm_body))
 
     sections.append((
         f"{marks[5]} {_DESCRIBE_GROUPS[3][0]}",

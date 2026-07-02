@@ -106,7 +106,7 @@ def test_premium_factor_full_matches_fast_semi_markov():
         ci_incidence_annual=lambda s, a, d: np.full(np.shape(a), annual(0.004)),
         ci_reincidence_annual=lambda s, a, p, sd: np.full_like(sd, annual(0.01), dtype=float),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
-        state_model=_reincidence_model(12),
+        state_machine=_reincidence_model(12),
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(np.shape(a), annual(0.001))),),
         premium_factor_annual=pf,
     )

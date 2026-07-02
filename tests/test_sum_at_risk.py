@@ -56,7 +56,7 @@ def _case(onset=0.01, income=1000.0):
         mortality_annual=0.005, lapse_annual=0.05, discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", 0.005),),
-        state_model=DISABILITY, ci_incidence_annual=onset,
+        state_machine=DISABILITY, ci_incidence_annual=onset,
     )
     return mp, basis
 

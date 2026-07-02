@@ -46,7 +46,7 @@ fcf.samples.export("samples", template="gmm", quiet=True)
   `inflation_table` / `surrender_value_table` / `expense_table` -- 각 rate 시트의
   `table_id` 참조 (실제 숫자는 그 시트에).
 - `ra_confidence` / `mortality_cv` / `morbidity_cv` -- 위험조정 스칼라.
-- `state_model` -- 상태기계 (`Model.from_preset` 키, 없으면 단일상태).
+- `state_machine` -- 상태기계 (`Model.from_preset` 키, 없으면 단일상태).
 - **`_DEFAULTS` 행** -- 모든 세그먼트의 공통 기본값. 각 세그먼트 행은 다른
   칸을 비워 두고 (`None`) **자기에게 다른 것만 override** 합니다 -- 예:
   `TERM_LIFE_A / FC` 는 `lapse_table` / `surrender_value_table` / `expense_table`

@@ -168,7 +168,7 @@ def test_semi_markov_escalation_only_coverage_is_not_dropped():
         State("disabled", sojourn_tracking_months=12, transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
     basis = Basis(mortality_annual=_Z, lapse_annual=_Z, discount_annual=0.0,
-                  ra_confidence=0.75, mortality_cv=0.10, state_model=sm,
+                  ra_confidence=0.75, mortality_cv=0.10, state_machine=sm,
                   coverages=(CoverageRate("CARE", _ONE),))
     mp = fcf.ModelPoints(
         issue_age=np.array([50], dtype=np.int64), premium=np.array([0.0]),

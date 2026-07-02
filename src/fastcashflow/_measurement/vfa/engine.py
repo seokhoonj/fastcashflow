@@ -357,8 +357,8 @@ def _project(
     # the occupancy decrement -- it never reads the GMM death-claim factor. A
     # state-conditioned death benefit or occupancy exit would be silently
     # ignored here, so reject it rather than mis-measure the guarantee.
-    state_model = resolve_model(basis)
-    if any(s.death_benefit_factor != 1.0 for s in state_model.states):
+    state_machine = resolve_model(basis)
+    if any(s.death_benefit_factor != 1.0 for s in state_machine.states):
         raise NotImplementedError(
             "state-conditioned death benefit (State.death_benefit_factor) is "
             "not supported on the VFA path; measure pays the GMDB/GMAB "
@@ -366,7 +366,7 @@ def _project(
             "factor does not reach."
         )
     if any(tr.after_sojourn_months
-           for s in state_model.states for tr in s.transitions):
+           for s in state_machine.states for tr in s.transitions):
         raise NotImplementedError(
             "a deterministic transition (Transition.after_sojourn_months) is not "
             "supported on the VFA path."

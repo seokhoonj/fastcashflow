@@ -50,8 +50,8 @@ def _basis(waiver_rate: float = 0.0, **overrides) -> Basis:
         coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
     )
     if waiver is not None:
-        # Set state_model explicitly to silence the implicit-fallback warning.
-        base["state_model"] = Model.from_preset("ACTIVE_WAIVER")
+        # Set state_machine explicitly to silence the implicit-fallback warning.
+        base["state_machine"] = Model.from_preset("ACTIVE_WAIVER")
     base.update(overrides)
     return Basis(**base)
 

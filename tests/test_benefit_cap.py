@@ -42,7 +42,7 @@ def _basis(cap):
     return Basis(
         mortality_annual=_ZERO, lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
-        state_model=_capped_model(cap),
+        state_machine=_capped_model(cap),
         coverages=(fcf.CoverageRate("DEATH", _ZERO),))
 
 

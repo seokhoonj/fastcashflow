@@ -1272,8 +1272,8 @@ def test_basis_investment_return_at_negative_one():
         _basis1(investment_return=-1.5)
 
 
-def test_modelpoints_state_above_state_model_count_rejected():
-    """A state index past the state_model's state count now raises a clear
+def test_modelpoints_state_above_state_machine_count_rejected():
+    """A state index past the state_machine's state count now raises a clear
     error at measurement (was a late IndexError at seating lookup), on both the
     full and fast paths. Codex 2026-06-07."""
     from fastcashflow.multistate import Model
@@ -1283,7 +1283,7 @@ def test_modelpoints_state_above_state_model_count_rejected():
         benefits={"DEATH": np.array([1000.0])},
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
-    basis = _basis1(state_model=Model.from_preset("ACTIVE_WAIVER"),
+    basis = _basis1(state_machine=Model.from_preset("ACTIVE_WAIVER"),
                     waiver_incidence_annual=_flat_rate(0.01))
     with pytest.raises(ValueError, match="accepts only .* seating states"):
         fcf.gmm.measure(mp, basis)               # full path (projection.py)

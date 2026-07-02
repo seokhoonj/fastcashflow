@@ -1116,7 +1116,7 @@ def _project_kernel_semi_markov(
             annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors)
 
 
-def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
+def _add_state_mortality_rates(rate_dict, state_machine, basis, sex_grid,
                                issue_age_grid, duration_grid,
                                issue_class_grid, elapsed_grid):
     """Add each state's distinct mortality decrement rate to ``rate_dict``.
@@ -1129,7 +1129,7 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
     behaviour.
     """
     table = basis.state_mortality_annual or {}
-    for rname in {s.mortality_rate for s in state_model.states}:
+    for rname in {s.mortality_rate for s in state_machine.states}:
         if rname == "mortality" or rname in rate_dict:
             continue
         mort_fn = table.get(rname) or basis.mortality_annual
@@ -1146,7 +1146,7 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
 _LAPSE_RATES = ("lapse", "lapse_paidup", "lapse_waiver")
 
 
-def _state_lapse_stack(state_model, rate_dict):
+def _state_lapse_stack(state_machine, rate_dict):
     """Per-state monthly lapse rate, ``(n_states, n_mp, n_year)``.
 
     Mirrors the per-state mortality stack: each state's surrender count is
@@ -1157,7 +1157,7 @@ def _state_lapse_stack(state_model, rate_dict):
     """
     zero = np.zeros_like(rate_dict["lapse"])
     rows = []
-    for s in state_model.states:
+    for s in state_machine.states:
         rname = None
         for tr in s.transitions:
             if tr.rate in _LAPSE_RATES:
@@ -1372,15 +1372,15 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             "book (the account benefit settles at exit, not over a pattern).")
 
     # In-force state machine -- see ``multistate.resolve_model`` for
-    # the fallback policy when ``basis.state_model`` is unset.
-    state_model = resolve_model(basis)
-    seating = np.asarray(state_model.seating, np.int64)
+    # the fallback policy when ``basis.state_machine`` is unset.
+    state_machine = resolve_model(basis)
+    seating = np.asarray(state_machine.seating, np.int64)
     if model_points.state.size and int(model_points.state.max()) >= seating.shape[0]:
         raise ValueError(
             f"ModelPoints.state has value {int(model_points.state.max())} but the "
             f"resolved state model accepts only {seating.shape[0]} seating states "
             f"(valid 0..{seating.shape[0] - 1}); check the state column against the "
-            "segment's state_model")
+            "segment's state_machine")
     start_state = seating[model_points.state]
 
     # A state-conditioned death benefit (death_benefit_factor) weights only the
@@ -1392,7 +1392,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
     if (model_points.coverage_index is not None
             and model_points.coverage_index.shape[0] > 0
             and any(s.death_benefit_factor != 1.0
-                    for s in state_model.states)):
+                    for s in state_machine.states)):
         cov_idx_k = model_points.coverage_index
         death_k = coverage_risk[cov_idx_k] == 0
         diag_k = coverage_is_diagnosis[cov_idx_k]
@@ -1414,7 +1414,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         (model_points.annuity_start_months > 0)
         | (model_points.annuity_term_months > 0)
         | (model_points.annuity_guarantee_months > 0)))
-    if uses_annuity_forms and is_semi_markov(state_model):
+    if uses_annuity_forms and is_semi_markov(state_machine):
         raise NotImplementedError(
             "the deferred / term-certain / guaranteed-period annuity payout forms "
             "are supported on the Markov projection path only (v1); this portfolio "
@@ -1425,7 +1425,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
     # The opt-in per-state reserve handles -- built on the Markov path below when
     # emit_state is asked for; left None otherwise (incl. the semi-Markov path).
     state_trace = None
-    if has_account and is_semi_markov(state_model):
+    if has_account and is_semi_markov(state_machine):
         # The account roll is folded into the Markov kernel only (v1). A plain
         # UL contract has no state model, so it routes to the Markov path; a
         # semi-Markov account product is a deferred kernel step.
@@ -1434,7 +1434,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             "path only (v1); this portfolio resolves to a semi-Markov state "
             "model. Account-on-semi-Markov is a later step."
         )
-    if is_semi_markov(state_model):
+    if is_semi_markov(state_machine):
         # Phase (c) detailed projection. Build the rate dict the cohort-
         # aware compile expects: static rates stay (n_mp, n_year); the
         # duration-dependent reincidence rate carries an extra cohort
@@ -1443,10 +1443,10 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         # passes ride the cohort-aware main pass: rule benefits scale the
         # saved per-month total in-force, diagnosis pools multiply that
         # same trajectory by a per-coverage depletion fraction.
-        max_cohort = max(s.sojourn_tracking_months for s in state_model.states
+        max_cohort = max(s.sojourn_tracking_months for s in state_machine.states
                           if s.sojourn_tracking_months > 0)
         rate_dict = {"mortality": mortality, "lapse": lapse}
-        _add_state_mortality_rates(rate_dict, state_model, basis,
+        _add_state_mortality_rates(rate_dict, state_machine, basis,
                                    sex_grid, issue_age_grid, duration_grid,
                                    issue_class_grid, elapsed_grid)
         if basis.waiver_incidence_annual is not None:
@@ -1480,7 +1480,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                     annual_to_monthly(
                         basis.disability_recovery_annual(
                             sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
-        compiled = compile_model_with_duration(state_model, rate_dict)
+        compiled = compile_model_with_duration(state_machine, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to
         edge_prob = compiled.edge_prob
@@ -1499,7 +1499,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         # state's in-force death exit (survive x mortality) so the death-count
         # reporter respects the within-month competing-risk order.
         state_death_exit = compiled.state_death_exit
-        state_lapse = _state_lapse_stack(state_model, rate_dict)
+        state_lapse = _state_lapse_stack(state_machine, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
         state_det_at = compiled.state_det_at
         state_det_to = compiled.state_det_to
@@ -1554,7 +1554,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         # ``disability_recovery``) remain semi-Markov-only.
         rate_dict = {"mortality": mortality, "waiver_incidence": waiver,
                      "lapse": lapse}
-        _add_state_mortality_rates(rate_dict, state_model, basis,
+        _add_state_mortality_rates(rate_dict, state_machine, basis,
                                    sex_grid, issue_age_grid, duration_grid,
                                    issue_class_grid, elapsed_grid)
         if basis.ci_incidence_annual is not None:
@@ -1563,7 +1563,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
             rate_dict["ci_incidence"] = ci_inc
-        if model_references_rate(state_model, "lapse_paidup"):
+        if model_references_rate(state_machine, "lapse_paidup"):
             paidup_fn = (basis.lapse_paidup_annual
                          or basis.lapse_annual)
             paidup = annual_to_monthly(
@@ -1572,7 +1572,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             if lapse_scale is not None:
                 paidup = paidup * lapse_scale
             rate_dict["lapse_paidup"] = np.ascontiguousarray(paidup)
-        if model_references_rate(state_model, "lapse_waiver"):
+        if model_references_rate(state_machine, "lapse_waiver"):
             # Unlike lapse_paidup (falls back to the active lapse), the waiver
             # state defaults to NO lapse -- a waived contract holds free cover,
             # so anti-selection keeps it in force. A 0 rate preserves the
@@ -1588,7 +1588,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 if lapse_scale is not None:
                     waiver_lapse = waiver_lapse * lapse_scale
             rate_dict["lapse_waiver"] = np.ascontiguousarray(waiver_lapse)
-        compiled = compile_model(state_model, rate_dict)
+        compiled = compile_model(state_machine, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to
         edge_prob = compiled.edge_prob
@@ -1597,7 +1597,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         state_pays_premium = compiled.state_pays_premium
         state_pays_benefit = compiled.state_pays_benefit
         state_death_exit = compiled.state_death_exit
-        state_lapse = _state_lapse_stack(state_model, rate_dict)
+        state_lapse = _state_lapse_stack(state_machine, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
         (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
          annuity_cf, annuity_certain_cf, disability_cf, lapse_flow,
@@ -1710,7 +1710,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                     np.any(compiled.state_premium_term_to != -1)),
                 state_death_exit=state_death_exit,
                 state_lapse=state_lapse,
-                state_names=tuple(s.name for s in state_model.states),
+                state_names=tuple(s.name for s in state_machine.states),
                 death_face=death_face,
                 has_death_coverage_rules=has_death_rules,
             )

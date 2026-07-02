@@ -42,7 +42,7 @@ def _basis(factor):
     return Basis(
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
-        state_model=_two_state(factor),
+        state_machine=_two_state(factor),
         coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
 
 
@@ -91,7 +91,7 @@ def test_default_factor_is_bit_identical():
     b_plain = Basis(
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
-        state_model=plain, coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
+        state_machine=plain, coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
     a = fcf.gmm.measure(mp, b_plain, full=True).cashflows.mortality_cf[0]
     b = fcf.gmm.measure(mp, _basis(1.0), full=True).cashflows.mortality_cf[0]
     assert np.array_equal(a, b)
@@ -143,7 +143,7 @@ def test_vfa_path_rejects_factor():
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO, discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
         investment_return=0.06, fund_fee=0.015,
-        state_model=_two_state(2.0),
+        state_machine=_two_state(2.0),
         coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
     mp = ModelPoints.single(40, 0.0, 60, account_value=1e6)
     with pytest.raises(NotImplementedError, match="death_benefit"):

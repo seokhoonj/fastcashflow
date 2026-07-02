@@ -149,7 +149,7 @@ Python 상수 / enum (예: `CalculationMethod.MORBIDITY == "MORBIDITY"`)
 `enum-like 식별자 family`:
 
 - `product`, `channel`, `table_id`, `coverage`, `calculation_method`,
-  `state`, `state_model` — 모두 외부 식별자 / 코드 상수 family. SCREAMING_SNAKE_CASE.
+  `state`, `state_machine` — 모두 외부 식별자 / 코드 상수 family. SCREAMING_SNAKE_CASE.
 - 줄임말 안 씀 (`MORT` 가 아닌 `MORTALITY`, `HOSP` 가 아닌 `INPATIENT` 등).
   단 industry-universal 한 매우 짧은 abbr 인 `ADB` 정도 예외.
 

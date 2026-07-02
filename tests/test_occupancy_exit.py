@@ -59,7 +59,7 @@ def _basis(model):
     return Basis(
         mortality_annual=_ZERO, lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
-        state_model=model, coverages=(fcf.CoverageRate("DEATH", _ZERO),))
+        state_machine=model, coverages=(fcf.CoverageRate("DEATH", _ZERO),))
 
 
 # ---------------------------------------------------------------------------

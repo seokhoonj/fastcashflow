@@ -736,7 +736,7 @@ def _di_recovery_basis(recovery_monthly: float) -> fcf.Basis:
         disability_recovery_annual=lambda s, a, p, sd: np.full(
             sd.shape, annual_from_monthly(recovery_monthly), dtype=float),
         discount_annual=0.0, ra_confidence=0.5, mortality_cv=0.0, disability_cv=0.0,
-        state_model=_di_recovery_model(),
+        state_machine=_di_recovery_model(),
         coverages=(fcf.CoverageRate(
             "DEATH", lambda s, a, d: np.full(d.shape, annual_from_monthly(0.001))),),
     )

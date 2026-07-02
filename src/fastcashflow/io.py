@@ -602,7 +602,7 @@ _SEGMENT_ASSUMPTION_COLS = frozenset({
     "mortality_age_shift", "morbidity_age_shift", "waiver_age_shift",
     "ra_confidence", "mortality_cv", "morbidity_cv", "longevity_cv",
     "disability_cv", "expense_cv", "cost_of_capital_rate", "investment_return",
-    "fund_fee", "ra_method", "state_model", "surrender_value_basis",
+    "fund_fee", "ra_method", "state_machine", "surrender_value_basis",
 })
 
 
@@ -894,18 +894,18 @@ def read_basis(path: Path | str) -> "BasisRouter":
                     "for cum_premium_factor, or an 'amount' column for "
                     "amount_per_policy / amount_per_unit."
                 )
-        # Optional state_model column -- non-programmer actuary picks a
+        # Optional state_machine column -- non-programmer actuary picks a
         # bundled topology by its preset key (e.g. "ACTIVE_WAIVER"). Blank cell
-        # leaves Basis.state_model = None; an unknown key is an
+        # leaves Basis.state_machine = None; an unknown key is an
         # error with a hint listing the registered keys.
-        state_model_key = cell("state_model")
-        if state_model_key is not None:
-            key = str(state_model_key).strip()
+        state_machine_key = cell("state_machine")
+        if state_machine_key is not None:
+            key = str(state_machine_key).strip()
             try:
-                kwargs["state_model"] = Model.from_preset(key)
+                kwargs["state_machine"] = Model.from_preset(key)
             except ValueError:
                 raise ValueError(
-                    f"{where}: state_model={key!r} is not a known preset "
+                    f"{where}: state_machine={key!r} is not a known preset "
                     f"(known: {', '.join(Model.presets())})"
                 ) from None
         if seg_key in result:

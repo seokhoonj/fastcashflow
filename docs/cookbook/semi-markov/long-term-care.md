@@ -137,7 +137,7 @@ basis = fcf.Basis(
     ra_confidence           = 0.75,                     # 위험조정 신뢰수준
     mortality_cv            = 0.10,                     # 사망률 변동계수
     disability_cv           = 0.20,                     # 간병 발생 변동계수
-    state_model             = model,
+    state_machine             = model,
     coverages               = (fcf.CoverageRate("DEATH", active_mort),))
 
 # 모델 포인트 -- 진단금 2,000 만, 월정액 100 만
@@ -189,7 +189,7 @@ toy_basis = fcf.Basis(
     discount_annual=0.0,                           # 무할인 (toy)
     ra_confidence=0.75,                            # 위험조정 신뢰수준
     mortality_cv=0.10,                             # 사망 변동계수
-    state_model=toy_model,                         # 상태기계
+    state_machine=toy_model,                         # 상태기계
     coverages=(fcf.CoverageRate("DEATH", zero),),  # 사망 보장
 )
 toy_mp = fcf.ModelPoints(

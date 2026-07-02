@@ -40,7 +40,7 @@ def _flat_assumptions(*, ci_reincidence_fn) -> fcf.Basis:
         discount_annual=0.0,
         ra_confidence=0.5,
         mortality_cv=0.0,
-        state_model=_cancer_reincidence_model(12),
+        state_machine=_cancer_reincidence_model(12),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
@@ -204,7 +204,7 @@ def _reincidence_assumptions(*, sojourn_tracking_months, exclusion_months,
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
-        state_model=_cancer_reincidence_model(sojourn_tracking_months),
+        state_machine=_cancer_reincidence_model(sojourn_tracking_months),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
@@ -299,7 +299,7 @@ def _reincidence_assumptions_with_extra_coverage(sojourn_tracking_months, exclus
         ra_confidence=base.ra_confidence,
         mortality_cv=base.mortality_cv,
         morbidity_cv=0.10,
-        state_model=base.state_model,
+        state_machine=base.state_machine,
         coverages=(
             fcf.CoverageRate(code="DEATH", rate=base.mortality_annual),
             fcf.CoverageRate(code="EXTRA", rate=extra_fn),
@@ -445,7 +445,7 @@ def _di_assumptions(*, sojourn_tracking_months, recovery_monthly):
         ra_confidence=0.75,
         mortality_cv=0.10,
         disability_cv=0.20,
-        state_model=_di_model(sojourn_tracking_months),
+        state_machine=_di_model(sojourn_tracking_months),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
@@ -473,7 +473,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
         ra_confidence=0.5,
         mortality_cv=0.0,
         disability_cv=0.0,
-        state_model=_di_model(12),
+        state_machine=_di_model(12),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
     mp = fcf.ModelPoints(
@@ -540,7 +540,7 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         ra_confidence=0.75,
         mortality_cv=0.10,
         disability_cv=0.20,
-        state_model=_di_model(36),
+        state_machine=_di_model(36),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
     rng = np.random.default_rng(23)
@@ -634,7 +634,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
         ra_confidence=base.ra_confidence,
         mortality_cv=base.mortality_cv,
         morbidity_cv=0.10,
-        state_model=base.state_model,
+        state_machine=base.state_machine,
         coverages=(
             CoverageRate(code="DEATH", rate=base.mortality_annual),
             CoverageRate(code="recur", rate=recur_rate),
