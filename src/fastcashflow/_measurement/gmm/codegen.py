@@ -42,7 +42,7 @@ from numba import njit, prange
 
 
 def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
-                                 premium_state, benefit_state,
+                                 state_pays_premium, state_pays_benefit,
                                  premium_term_to=None,
                                  use_morbidity=True, use_annuity=True,
                                  use_disability=True, use_lae=True,
@@ -67,8 +67,8 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     edge_from = [int(x) for x in edge_from]
     edge_to = [int(x) for x in edge_to]
     edge_lump_sum = [bool(x) for x in edge_lump_sum]
-    premium_state = [bool(x) for x in premium_state]
-    benefit_state = [bool(x) for x in benefit_state]
+    state_pays_premium = [bool(x) for x in state_pays_premium]
+    state_pays_benefit = [bool(x) for x in state_pays_benefit]
     # Calendar-keyed (at_premium_term) deterministic transitions: per-state
     # destination (-1 none, -2 exit, >=0 dest state). The movers relabel
     # occupancy at the model point's premium_term -- emitted inside every
@@ -83,9 +83,9 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
 
     sum_all = " + ".join(f"occ_{i}" for i in range(n_states))
     sum_prem = " + ".join(f"occ_{i}" for i in range(n_states)
-                          if premium_state[i]) or "0.0"
+                          if state_pays_premium[i]) or "0.0"
     sum_ben = " + ".join(f"occ_{i}" for i in range(n_states)
-                         if benefit_state[i]) or "0.0"
+                         if state_pays_benefit[i]) or "0.0"
     # State-machine lapse exits: occupancy on each state times that state's own
     # lapse rate, so surrender follows the actual lapse (a non-lapsing state
     # contributes nothing; a paid-up state lapses at its own rate). For a single
@@ -147,7 +147,7 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
 
     line(0, "@njit(parallel=True, cache=True)")
     line(0, "def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,")
-    line(0, "           premium_state, benefit_state, start_state, "
+    line(0, "           state_pays_premium, state_pays_benefit, start_state, "
             "issue_index, sex,")
     line(0, "           term_months, contract_boundary_months, count, premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
@@ -377,7 +377,7 @@ def _atomic_write_text(path: Path, content: str) -> None:
 
 
 def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
-                              premium_state, benefit_state,
+                              state_pays_premium, state_pays_benefit,
                               premium_term_to=None,
                               use_morbidity=True, use_annuity=True,
                               use_disability=True, use_lae=True,
@@ -404,8 +404,8 @@ def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
         tuple(int(x) for x in edge_from),
         tuple(int(x) for x in edge_to),
         tuple(bool(x) for x in edge_lump_sum),
-        tuple(bool(x) for x in premium_state),
-        tuple(bool(x) for x in benefit_state),
+        tuple(bool(x) for x in state_pays_premium),
+        tuple(bool(x) for x in state_pays_benefit),
         tuple(int(x) for x in premium_term_to),
         bool(use_morbidity), bool(use_annuity), bool(use_disability),
         bool(use_lae), bool(use_surrender), bool(surrender_is_amount),
@@ -416,7 +416,7 @@ def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
 
     src = _markov_kernel_source(
         n_states, edge_from, edge_to, edge_lump_sum,
-        premium_state, benefit_state, premium_term_to=premium_term_to,
+        state_pays_premium, state_pays_benefit, premium_term_to=premium_term_to,
         use_morbidity=use_morbidity, use_annuity=use_annuity,
         use_disability=use_disability, use_lae=use_lae,
         use_surrender=use_surrender, surrender_is_amount=surrender_is_amount,
@@ -511,7 +511,7 @@ def clear_codegen_cache(*, prune_older_than_days: float | None = None) -> int:
 def _semi_markov_kernel_source(
     n_states, state_duration_max, periodic_benefit_term_months,
     edge_from, edge_to, edge_lump_sum,
-    premium_state, benefit_state,
+    state_pays_premium, state_pays_benefit,
     use_annuity=True, use_lae=True, use_surrender=True,
     surrender_is_amount=False,
 ) -> str:
@@ -527,8 +527,8 @@ def _semi_markov_kernel_source(
     edge_from = [int(x) for x in edge_from]
     edge_to = [int(x) for x in edge_to]
     edge_lump_sum = [bool(x) for x in edge_lump_sum]
-    premium_state = [bool(x) for x in premium_state]
-    benefit_state = [bool(x) for x in benefit_state]
+    state_pays_premium = [bool(x) for x in state_pays_premium]
+    state_pays_benefit = [bool(x) for x in state_pays_benefit]
     D = [int(x) for x in state_duration_max]
     cap = [int(x) for x in periodic_benefit_term_months]
 
@@ -543,7 +543,7 @@ def _semi_markov_kernel_source(
     all_next = [occ_next(s, tau) for s in range(n_states) for tau in range(D[s])]
     sum_all = " + ".join(all_occ)
     sum_prem = " + ".join(occ(s, tau) for s in range(n_states)
-                          if premium_state[s]
+                          if state_pays_premium[s]
                           for tau in range(D[s])) or "0.0"
     # ``periodic_benefit_term_months[s] > 0`` caps the paid cohorts: only sojourn
     # ``tau < cap`` is paid (lives past the cap stay in force, see
@@ -552,7 +552,7 @@ def _semi_markov_kernel_source(
     # ``cap < D``, so ``min`` is belt-and-suspenders.
     sum_ben = " + ".join(
         occ(s, tau) for s in range(n_states)
-        if benefit_state[s]
+        if state_pays_benefit[s]
         for tau in range(min(D[s], cap[s]) if cap[s] else D[s])) or "0.0"
     # State-machine lapse exits: each state's cohort-summed occupancy times its
     # own lapse rate (cohort-independent), so surrender follows the actual
@@ -850,7 +850,7 @@ _SEMI_MARKOV_KERNEL_CACHE: dict = {}
 def _get_semi_markov_kernel(
     n_states, state_duration_max, periodic_benefit_term_months,
     edge_from, edge_to, edge_lump_sum,
-    premium_state, benefit_state,
+    state_pays_premium, state_pays_benefit,
     use_annuity=True, use_lae=True, use_surrender=True,
     surrender_is_amount=False,
 ):
@@ -873,8 +873,8 @@ def _get_semi_markov_kernel(
         tuple(int(x) for x in edge_from),
         tuple(int(x) for x in edge_to),
         tuple(bool(x) for x in edge_lump_sum),
-        tuple(bool(x) for x in premium_state),
-        tuple(bool(x) for x in benefit_state),
+        tuple(bool(x) for x in state_pays_premium),
+        tuple(bool(x) for x in state_pays_benefit),
         bool(use_annuity), bool(use_lae), bool(use_surrender),
         bool(surrender_is_amount),
     )
@@ -885,7 +885,7 @@ def _get_semi_markov_kernel(
     src = _semi_markov_kernel_source(
         n_states, state_duration_max, periodic_benefit_term_months,
         edge_from, edge_to, edge_lump_sum,
-        premium_state, benefit_state,
+        state_pays_premium, state_pays_benefit,
         use_annuity=use_annuity, use_lae=use_lae, use_surrender=use_surrender,
         surrender_is_amount=surrender_is_amount,
     )

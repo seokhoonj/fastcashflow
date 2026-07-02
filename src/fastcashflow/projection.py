@@ -110,8 +110,8 @@ class StateTrace:
     only -- the semi-Markov path leaves ``Cashflows.state_trace`` ``None``.
 
     ``edge_prob`` is ``(n_edges, n_mp, n_year)`` -- the transition probability of
-    each edge, constant within a policy year. ``premium_state`` /
-    ``benefit_state`` / ``death_benefit_factor`` are the ``(n_states,)`` per-state
+    each edge, constant within a policy year. ``state_pays_premium`` /
+    ``state_pays_benefit`` / ``death_benefit_factor`` are the ``(n_states,)`` per-state
     flags and the death-benefit multiplier the projection weighted occupancy by.
     ``has_premium_term_move`` flags a deterministic at-premium-term transition
     (active -> paid-up): the edge list alone does not carry it, so an edge-only
@@ -136,8 +136,8 @@ class StateTrace:
     n_states: int
     start_state: IntArray
     count: FloatArray
-    premium_state: BoolArray
-    benefit_state: BoolArray
+    state_pays_premium: BoolArray
+    state_pays_benefit: BoolArray
     death_benefit_factor: FloatArray
     has_premium_term_move: bool
     state_death_exit: FloatArray
@@ -425,7 +425,7 @@ def _benefit_factor(t, year, red_factor, red_end, step_month, step_factor,
 def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     state_premium_term_to,
                     edge_from, edge_to, edge_prob, edge_lump_sum,
-                    n_states, premium_state, benefit_state, start_state,
+                    n_states, state_pays_premium, state_pays_benefit, start_state,
                     term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
@@ -454,8 +454,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     month it is advanced along the transition edges: edge ``e`` carries
     ``edge_prob[e, mp, year]`` of the occupancy from state ``edge_from[e]``
     to ``edge_to[e]``. Premium accrues on the states flagged in
-    ``premium_state``; claims, expenses and survival benefits on the total
-    occupancy; disability income on the ``benefit_state`` occupancy, and a
+    ``state_pays_premium``; claims, expenses and survival benefits on the total
+    occupancy; disability income on the ``state_pays_benefit`` occupancy, and a
     lump-sum transition pays on the flow it carries. The transition
     probabilities are composed by the caller, so the kernel itself is
     state-machine-agnostic.
@@ -603,9 +603,9 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 dclaim_occ += occ[s] * state_death_benefit_factor[s]
                 deaths_acc += occ[s] * state_death_exit[s, mp, year]
                 lapse_acc += occ[s] * state_lapse[s, mp, year]
-                if premium_state[s]:
+                if state_pays_premium[s]:
                     prem_occ += occ[s]
-                if benefit_state[s]:
+                if state_pays_benefit[s]:
                     benefit_occ += occ[s]
             inforce[mp, t] = inforce_t
             # No surrender in the payout phase (a life annuity in payment cannot
@@ -851,7 +851,7 @@ def _project_kernel_semi_markov(
     state_det_at, state_det_to, state_det_lump,
     edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, periodic_benefit_term_months,
-    premium_state, benefit_state, start_state,
+    state_pays_premium, state_pays_benefit, start_state,
     term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
@@ -952,9 +952,9 @@ def _project_kernel_semi_markov(
                 dclaim_occ += state_sum * state_death_benefit_factor[s]
                 deaths_acc += state_sum * state_death_exit[s, mp, year]
                 lapse_acc += state_sum * state_lapse[s, mp, year]
-                if premium_state[s]:
+                if state_pays_premium[s]:
                     prem_occ += state_sum
-                if benefit_state[s]:
+                if state_pays_benefit[s]:
                     cap = periodic_benefit_term_months[s]
                     if cap > 0:
                         # Pay only the cohorts still within the cap; lives
@@ -1486,8 +1486,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         edge_prob = compiled.edge_prob
         edge_lump_sum = compiled.edge_lump_sum
         n_states = compiled.n_states
-        premium_state = compiled.premium_state
-        benefit_state = compiled.benefit_state
+        state_pays_premium = compiled.state_pays_premium
+        state_pays_benefit = compiled.state_pays_benefit
         state_duration_max = compiled.state_duration_max
         periodic_benefit_term_months = compiled.periodic_benefit_term_months
         # compile_model_with_duration returns ``edge_prob`` shape
@@ -1511,7 +1511,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             state_death_benefit_factor, state_det_at, state_det_to, state_det_lump,
             edge_from, edge_to, edge_prob, edge_lump_sum,
             n_states, state_duration_max, state_offset, periodic_benefit_term_months,
-            premium_state, benefit_state, start_state,
+            state_pays_premium, state_pays_benefit, start_state,
             model_points.term_months,
             model_points.contract_boundary_months,
             model_points.count,
@@ -1594,8 +1594,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         edge_prob = compiled.edge_prob
         edge_lump_sum = compiled.edge_lump_sum
         n_states = compiled.n_states
-        premium_state = compiled.premium_state
-        benefit_state = compiled.benefit_state
+        state_pays_premium = compiled.state_pays_premium
+        state_pays_benefit = compiled.state_pays_benefit
         state_death_exit = compiled.state_death_exit
         state_lapse = _state_lapse_stack(state_model, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
@@ -1613,8 +1613,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             edge_prob,
             edge_lump_sum,
             n_states,
-            premium_state,
-            benefit_state,
+            state_pays_premium,
+            state_pays_benefit,
             start_state,
             model_points.term_months,
             model_points.contract_boundary_months,
@@ -1703,8 +1703,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 n_states=n_states,
                 start_state=start_state,
                 count=model_points.count,
-                premium_state=premium_state,
-                benefit_state=benefit_state,
+                state_pays_premium=state_pays_premium,
+                state_pays_benefit=state_pays_benefit,
                 death_benefit_factor=state_death_benefit_factor,
                 has_premium_term_move=bool(
                     np.any(compiled.state_premium_term_to != -1)),

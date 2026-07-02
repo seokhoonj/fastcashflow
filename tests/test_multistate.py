@@ -57,8 +57,8 @@ def test_compile_waiver_edges():
     }
     compiled = compile_model(Model.from_preset("ACTIVE_WAIVER"), rates)
     assert compiled.n_states == 2
-    assert list(compiled.premium_state) == [True, False]
-    assert list(compiled.benefit_state) == [False, False]   # waiver: no benefit
+    assert list(compiled.state_pays_premium) == [True, False]
+    assert list(compiled.state_pays_benefit) == [False, False]   # waiver: no benefit
     assert not compiled.edge_lump_sum.any()                 # ... no lump sums
 
     prob = {(int(f), int(t)): float(compiled.edge_prob[i, 0, 0])

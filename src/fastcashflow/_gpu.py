@@ -20,7 +20,7 @@ MAX_STATES = 8
 
 @cuda.jit
 def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-                       premium_state, benefit_state, start_state, issue_index,
+                       state_pays_premium, state_pays_benefit, start_state, issue_index,
                        sex, term_months, contract_boundary_months, count, premium,
                        premium_term_months, premium_frequency_months, annuity_frequency_months,
                        coverage_index, coverage_amount, coverage_offset, coverage_rates,
@@ -38,9 +38,9 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
 
     In-force is an occupancy vector over ``n_states`` transient states,
     advanced each month along the transition edges. Premium accrues on the
-    states flagged in ``premium_state``; claims, expenses and survival
+    states flagged in ``state_pays_premium``; claims, expenses and survival
     benefits on the total occupancy; disability income on the
-    ``benefit_state`` occupancy, and a lump-sum transition on its flow.
+    ``state_pays_benefit`` occupancy, and a lump-sum transition on its flow.
     """
     mp = cuda.grid(1)
     if mp >= issue_index.shape[0]:
@@ -96,9 +96,9 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         benefit_occ = 0.0
         for s in range(n_states):
             inforce_t += occ[s]
-            if premium_state[s]:
+            if state_pays_premium[s]:
                 prem_occ += occ[s]
-            if benefit_state[s]:
+            if state_pays_benefit[s]:
                 benefit_occ += occ[s]
         discount_factor_bom_t = discount_factor_bom[t]
         discount_factor_mid_t = discount_factor_mid[t]
@@ -190,7 +190,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
 
 
 def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-              premium_state, benefit_state, start_state, issue_index, sex,
+              state_pays_premium, state_pays_benefit, start_state, issue_index, sex,
               term_months, contract_boundary_months, count, premium,
               premium_term_months, premium_frequency_months, annuity_frequency_months,
               coverage_index, coverage_amount, coverage_offset, coverage_rates,
@@ -223,8 +223,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_edge_to = cuda.to_device(edge_to)
     d_edge_prob = cuda.to_device(edge_prob)
     d_edge_lump = cuda.to_device(edge_lump_sum)
-    d_premium_state = cuda.to_device(premium_state)
-    d_benefit_state = cuda.to_device(benefit_state)
+    d_state_pays_premium = cuda.to_device(state_pays_premium)
+    d_state_pays_benefit = cuda.to_device(state_pays_benefit)
     d_start_state = cuda.to_device(start_state)
     d_issue = cuda.to_device(issue_index)
     d_sex = cuda.to_device(sex)
@@ -266,7 +266,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
         d_edge_from, d_edge_to, d_edge_prob, d_edge_lump, n_states,
-        d_premium_state, d_benefit_state, d_start_state, d_issue, d_sex,
+        d_state_pays_premium, d_state_pays_benefit, d_start_state, d_issue, d_sex,
         d_term, d_boundary, d_count, d_premium, d_premium_term, d_premium_freq,
         d_annuity_freq, d_coverage_index, d_cov_amount, d_cov_offset, d_coverage_rates,
         d_premium_factor,

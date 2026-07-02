@@ -60,7 +60,7 @@ class CompiledModel:
         ``(n_edges,)`` bool, the lump-sum transitions.
     n_states
         The number of transient states.
-    premium_state, benefit_state
+    state_pays_premium, state_pays_benefit
         ``(n_states,)`` bool flags.
     state_duration_max
         ``None`` for Markov; ``(n_states,)`` int with the effective cohort
@@ -75,8 +75,8 @@ class CompiledModel:
     edge_prob: FloatArray
     edge_lump_sum: BoolArray
     n_states: int
-    premium_state: BoolArray
-    benefit_state: BoolArray
+    state_pays_premium: BoolArray
+    state_pays_benefit: BoolArray
     state_duration_max: IntArray | None = None
     periodic_benefit_term_months: IntArray | None = None
     # Per-state exact in-force death-exit probability -- ``survive x mortality``,
@@ -700,8 +700,8 @@ def compile_model(
         edge_prob=np.ascontiguousarray(np.stack(edge_prob)),
         edge_lump_sum=np.array(edge_lump_sum, dtype=np.bool_),
         n_states=len(model.states),
-        premium_state=np.array([s.pays_premium for s in model.states], dtype=np.bool_),
-        benefit_state=np.array([s.pays_periodic_benefit for s in model.states], dtype=np.bool_),
+        state_pays_premium=np.array([s.pays_premium for s in model.states], dtype=np.bool_),
+        state_pays_benefit=np.array([s.pays_periodic_benefit for s in model.states], dtype=np.bool_),
         state_duration_max=None,
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
         state_death_benefit_factor=np.array(
@@ -741,7 +741,7 @@ def compile_model_with_duration(
       out of an untracked state only ``tau = 0`` is meaningful.
     * ``edge_lump_sum`` -- ``(n_edges,)`` bool, the lump-sum transitions.
     * ``n_states`` -- the number of transient states.
-    * ``premium_state`` / ``benefit_state`` -- ``(n_states,)`` bool.
+    * ``state_pays_premium`` / ``state_pays_benefit`` -- ``(n_states,)`` bool.
     * ``state_duration_max`` -- ``(n_states,)`` int. The effective cohort
       count per state (``max(s.sojourn_tracking_months, 1)``). Untracked states have
       value 1; tracked states have the declared ``sojourn_tracking_months``.
@@ -937,8 +937,8 @@ def compile_model_with_duration(
         edge_prob=edge_prob,
         edge_lump_sum=np.array(edge_lump_sum, dtype=np.bool_),
         n_states=len(model.states),
-        premium_state=np.array([s.pays_premium for s in model.states], dtype=np.bool_),
-        benefit_state=np.array([s.pays_periodic_benefit for s in model.states], dtype=np.bool_),
+        state_pays_premium=np.array([s.pays_premium for s in model.states], dtype=np.bool_),
+        state_pays_benefit=np.array([s.pays_periodic_benefit for s in model.states], dtype=np.bool_),
         state_duration_max=state_duration_max,
         periodic_benefit_term_months=np.array(
             [s.periodic_benefit_term_months for s in model.states], dtype=np.int64),

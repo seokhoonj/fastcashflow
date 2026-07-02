@@ -192,8 +192,8 @@ def _state_reserve(model_points: ModelPoints, proj: Cashflows,
             "in-force -- the portfolio uses a mechanic the per-state edge-list "
             "replay does not carry (v1 supports plain Markov transitions).")
 
-    prem_occ = occ_t[:, st.premium_state, :].sum(axis=1)     # (n_mp, n_time)
-    benefit_occ = occ_t[:, st.benefit_state, :].sum(axis=1)
+    prem_occ = occ_t[:, st.state_pays_premium, :].sum(axis=1)     # (n_mp, n_time)
+    benefit_occ = occ_t[:, st.state_pays_benefit, :].sum(axis=1)
     dclaim_occ = (occ_t * factor[None, :, None]).sum(axis=1)
 
     prem_unit = _safe_div(proj.premium_cf, prem_occ)         # per premium-state unit
@@ -203,8 +203,8 @@ def _state_reserve(model_points: ModelPoints, proj: Cashflows,
     exp_unit = _safe_div(proj.expense_cf, inforce_st)
     surr_unit = _safe_div(proj.surrender_cf, inforce_st)
 
-    prem_state = st.premium_state[None, :, None]
-    benefit_state = st.benefit_state[None, :, None]
+    prem_state = st.state_pays_premium[None, :, None]
+    state_pays_benefit = st.state_pays_benefit[None, :, None]
     # Beginning-of-month per-unit flow: premium is an inflow (reduces the value);
     # v1 carries no annuity payout, so the BOM leg is premium only.
     flow_bom = -np.where(prem_state, prem_unit[:, None, :], 0.0)
@@ -214,7 +214,7 @@ def _state_reserve(model_points: ModelPoints, proj: Cashflows,
     # aggregate flow exactly.
     flow_mid = (factor[None, :, None] * claim_unit[:, None, :]
                 + morb_unit[:, None, :]
-                + np.where(benefit_state, dis_unit[:, None, :], 0.0)
+                + np.where(state_pays_benefit, dis_unit[:, None, :], 0.0)
                 + exp_unit[:, None, :]
                 + surr_unit[:, None, :])
     flow_bom = np.ascontiguousarray(flow_bom)

@@ -1748,8 +1748,8 @@ def _measure_fast(
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum
             n_states = compiled.n_states
-            premium_state = compiled.premium_state
-            benefit_state = compiled.benefit_state
+            state_pays_premium = compiled.state_pays_premium
+            state_pays_benefit = compiled.state_pays_benefit
             state_duration_max = compiled.state_duration_max
             periodic_benefit_term_months = compiled.periodic_benefit_term_months
             # compile_model_with_duration returns ``edge_prob`` shape
@@ -1804,8 +1804,8 @@ def _measure_fast(
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum
             n_states = compiled.n_states
-            premium_state = compiled.premium_state
-            benefit_state = compiled.benefit_state
+            state_pays_premium = compiled.state_pays_premium
+            state_pays_benefit = compiled.state_pays_benefit
             # compile_model returns ``edge_prob`` with the edge axis
             # first -- (n_edges, sex, age, year). Transpose so the edge axis
             # is innermost: all edges for a given (sex, age, year) lookup
@@ -2076,8 +2076,8 @@ def _measure_fast(
         edge_to,
         edge_prob,
         edge_lump_sum,
-        premium_state,
-        benefit_state,
+        state_pays_premium,
+        state_pays_benefit,
         start_state,
         issue_index,
         model_points.sex,
@@ -2126,7 +2126,7 @@ def _measure_fast(
             kernel = _get_semi_markov_kernel(
                 n_states, state_duration_max, periodic_benefit_term_months,
                 edge_from, edge_to,
-                edge_lump_sum, premium_state, benefit_state,
+                edge_lump_sum, state_pays_premium, state_pays_benefit,
                 use_annuity=use_annuity, use_lae=use_lae,
                 use_surrender=use_surrender,
                 surrender_is_amount=surrender_is_amount,
@@ -2179,7 +2179,7 @@ def _measure_fast(
             # readable reference but are no longer on the default path.
             kernel = _get_markov_kernel(
                 n_states, edge_from, edge_to, edge_lump_sum,
-                premium_state, benefit_state,
+                state_pays_premium, state_pays_benefit,
                 premium_term_to=compiled.state_premium_term_to,
                 use_morbidity=use_morbidity, use_annuity=use_annuity,
                 use_disability=use_disability, use_lae=use_lae,
