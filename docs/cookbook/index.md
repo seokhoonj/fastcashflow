@@ -94,6 +94,11 @@
 * - 1.5
   - [할인율 곡선 구성 — Smith-Wilson](basics/discount-curve)
   - 시장금리(국고채)에서 `discount_annual` 곡선을 `fcf.curves.smith_wilson` 으로 구성.
+* - 1.6
+  - [상태기계 — 상태·전이·경과](basics/state-machine)
+  - `fcf.multistate` 의 `Model` / `State` / `Transition`. 상태 번호와 이탈
+    (`to=None`), 확률 vs 결정적 전이, 경과 (`sojourn_*`), 인자 레퍼런스.
+    대부분은 `Model.from_preset` 한 줄.
 :::
 
 ### 2. 단순 상품
@@ -369,6 +374,7 @@ basics/overview
 basics/calculation-methods
 basics/mortality-roles
 basics/coverage-mechanics
+basics/state-machine
 :::
 
 :::{toctree}
